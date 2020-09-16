@@ -1,0 +1,126 @@
+---
+title: "Assignment 1 Classification Trees, Bagging and Random Forests"
+author: "Fleur Petit"
+date: "09/09/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(memoise)
+pima <- read.delim("pima.txt", sep = ",")
+credit <- read.delim("credit.txt", sep = ",")
+
+```
+
+# Functions
+
+```{r}
+
+impurity <- function(y) {
+  p0t <- length(y[y == 0])/length(y)
+  p0t*(1-p0t)
+}
+
+compute_splits <- function(x) {
+  x_sorted <- sort(unique(x))
+  splits <- round((x_sorted[1:length(x_sorted)-1] + x_sorted[2:length(x_sorted)])/2)
+}
+
+bestsplit <- function(x, y) {
+  splits <- compute_splits(x)
+  impurities <- rep(0, length(splits))
+  for (i in 1:length(splits)) {
+    impurities[i] <- impurity((x<=splits[i]) == y)
+  }
+  splits[impurities == min(impurities)][1]
+}
+
+per_feat <- function(use_feats, x, y, minleaf) {
+  splt_imp <- matrix(nrow = length(use_feats), ncol = 2, dimnames = list(use_feats, c("split", "impurity")))
+  for (feat in use_feats) {
+    split <- bestsplit(x[[feat]], y)
+    nxl <- length(x[x[[feat]] <= split,])
+    nxr <- nrow(x[x[[feat]] > split,])
+    if (minleaf <= min(nxl, nxr)){ # Splits that result in smaller leaves than minleaf are not allowed
+      imp <- impurity((x[[feat]] <= split) == y) # Didn't do the majority vote
+      splt_imp[feat,] <- c(split, imp)
+    }
+  }
+  splt_imp
+}
+
+tree_grow <- function(side, x, y, nmin, minleaf, nfeat) {
+  # x: a 2D array with attribute values: each row contains the attribute values of one training example
+  # y: a 1D array of class labels. Binary 0 or 1. No missing values
+  # nmin: stop growing tree: minimum number of observations node must contain to split
+  # minleaf: stop growing tree: minimum number of observations for one node after split
+  # nfeat: number of features that should be considered each split (draw at random nfeat features and select the best one)
+  # For normal tree growing nfeat equals the number of features, for random forrest it is less.
+  # Returns: tree object 
+  feat <- NULL
+  node <- NULL
+#  tree <- c()
+  feats <- colnames(x)
+  use_feats <- sample(feats, nfeat)
+  #impurities <- spread(tibble(x= use_feats, y = rep(0,length(use_feats))), x, y)
+  splt_imp <- per_feat(use_feats, x, y, minleaf)
+  feat <- rownames(splt_imp)[splt_imp[,"impurity"] == min(splt_imp[,"impurity"], na.rm = T)][1]
+  complete <- splt_imp[complete.cases(splt_imp),]
+  #  check_splt <- nrow(splt_imp) != 0
+  if (!is.null(feat) & !is.na(feat) & !is.null(complete)) {
+    split <- splt_imp[feat,"split"]
+    xl <- x[x[[feat]] <= split,]
+    xr <- x[x[[feat]] > split,]
+    yl <- y[x[[feat]] <= split]
+    yr <- y[x[[feat]] > split]
+    node <- c(side, feat, split, list(row.names(xl)), list(row.names(xr)))
+    #tree <- c(tree, node)
+  } 
+  if (!is.null(node) & !is.null(split) & !is.na(split)){
+    print(node)
+    if (nrow(xl) > nmin & !any(is.na(node))){ # leaves smaller than nmin may not be split
+      tree_grow("left", xl, yl, nmin, minleaf, nfeat)
+    } 
+    if (nrow(xr) > nmin & !any(is.na(node))){
+      tree_grow("right", xr, yr, nmin, minleaf, nfeat)
+    }
+    
+  }
+  
+  
+}
+
+tree_pred <- function(x, tr){
+  # A new case is dropped down the tree and assigned to the majority class of each node it passes
+  # x: 2d array containing attribute values of cases for which prediction is required
+  # tr: tree object created in tree_grow
+  # Returns: 1d array with predicted class labels for cases in x
+}
+
+
+```
+
+
+## Test functions 
+
+```{r}
+
+ytest <- c(1,0,1,1,1,0,0,1,1,0,1)
+
+impurity(ytest)
+
+bestsplit(credit[,4],credit[,6])
+
+side <- "root"
+x <- credit[,1:ncol(credit)-1]
+y <- credit[,ncol(credit)]
+nmin <- 2
+minleaf <- 1
+nfeat <-  ncol(credit)-1
+
+tree_grow(side, x, y, nmin, minleaf, nfeat)
+
+
+```
