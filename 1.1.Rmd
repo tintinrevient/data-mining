@@ -1,0 +1,174 @@
+---
+title: "Assignment 1 Classification Trees, Bagging and Random Forests"
+author: "Fleur Petit"
+date: "09/09/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(memoise)
+pima <- read.delim("pima.txt", sep = ",")
+credit <- read.delim("credit.txt", sep = ",")
+
+```
+
+# Functions
+
+```{r}
+
+# Compute the impurity
+impurity <- function(labels) {
+  p0t <- length(labels[labels == 0])/length(labels)
+  p0t*(1-p0t)
+}
+
+# Compute all possible and allowed splits on the values of a given variable
+compute_splits <- function(values) {
+  levels_sorted <- sort(unique(values)) # get unique values of the feature (I call them the levels)
+  (levels_sorted[1:length(levels_sorted)-1] + levels_sorted[2:length(levels_sorted)])/2
+}
+
+# Compute the best split for a given variable
+bestsplit <- function(values, labels, minleaf) {
+  splits <- compute_splits(values)
+  imp_pa <- impurity(labels) # parent impurity
+  
+  # Empty arrays storing results
+  right_children <- rep(NA, length(splits))
+  left_children <- rep(NA, length(splits))
+  labels_left <- rep(NA, length(splits))
+  labels_right <- rep(NA, length(splits))
+  impurity_reductions <- rep(NA, length(splits))
+  
+  for (i in 1:length(splits)) {
+    split <- splits[i]
+    left_children[i] <- list(which(values <= split))
+    right_children[i] <- list(which(values > split))
+    labels_left[i] <- list(labels[values <= split])
+    labels_right[i] <- list(labels[values > split])
+    nl <- length(left_children[i])
+    nr <- length(right_children[i])
+    if (minleaf <= min(nl, nr)) {
+      plc <- nl/length(labels_left[i])
+      prc <- nr/length(labels_right[i])
+    
+      imp_lc <- impurity(labels_left[i][[1]])
+      imp_rc <- impurity(labels_right[i][[1]])
+      
+      impurity_reductions[i] <- imp_pa - (plc*imp_lc + prc*imp_rc)
+    }
+  }
+  
+  index_best_split <- match(max(impurity_reductions, na.rm = T), impurity_reductions)[1]
+  split <- splits[index_best_split]
+  lc <- left_children[index_best_split]
+  rc <- right_children[index_best_split]
+  lc_labs <- labels_left[index_best_split]
+  rc_labs <- labels_right[index_best_split]
+  max_impurity_reduction <- impurity_reductions[index_best_split]
+  list(split = split, lc = lc, rc = rc, lc_labs = lc_labs, rc_labs = rc_labs, imp_red = max_impurity_reduction)
+}
+
+# Compute the best split for each feat
+per_feat <- function(df, labels, minleaf, use_feats) {
+#  split_per_feat <- matrix(nrow = length(use_feats), ncol = 7, dimnames = list(1:length(use_feats), c("feat", "split", "lc", "rc", "lc_labs", "rc_labs", "imp_red")))
+#  split_per_feat[,"feat"] <- use_feats
+  split_per_feat <- c()
+  for (feat in use_feats) {
+    split_per_feat <- c(split_per_feat, feat = feat, bestsplit(df[[feat]], labels, minleaf))
+  }
+  split_per_feat
+}
+
+tree_grow <- function(tree, layer_nr, side, df, labels, nmin, minleaf, nfeat) {
+  # x: a 2D array with attribute values: each row contains the attribute values of one training example
+  # y: a 1D array of class labels. Binary 0 or 1. No missing values
+  # nmin: stop growing tree: minimum number of observations node must contain to split
+  # minleaf: stop growing tree: minimum number of observations for one node after split
+  # nfeat: number of features that should be considered each split (draw at random nfeat features and select the best one)
+  # For normal tree growing nfeat equals the number of features, for random forrest it is less.
+  # Returns: tree object 
+  feats <- colnames(df)
+  use_feats <- sort(sample(feats, nfeat))
+  split_per_feat <- per_feat(df, labels, minleaf, use_feats)
+  
+  split_per_feat <- tibble(split_per_feat) %>% 
+    mutate(variable = names(split_per_feat),
+           nr = sort(rep(1:nfeat, length(unique(names(split_per_feat))))
+           )
+    ) %>% 
+    rename(value = split_per_feat) %>% 
+    spread(variable, value) %>%
+    mutate(feat = as.character(unlist(feat)),
+           imp_red = as.numeric(unlist(imp_red)),
+           split = as.numeric(unlist(split)))
+  
+  complete <- split_per_feat[complete.cases(split_per_feat$split),]
+  best_feat <- complete[complete[,"imp_red"] == max(complete[,"imp_red"], na.rm = T),][["feat"]][1]
+  node <- split_per_feat %>% filter(feat == best_feat) %>% mutate(side = side, layer_nr = layer_nr) %>% select(-nr)
+  tree <- bind_rows(tree, node)
+  saveRDS(object = tree,file = "tree.rds")
+  
+  
+  nlc <- length(unlist(node$lc))
+  nrc <- length(unlist(node$rc))
+  if (nlc > nmin){ # leaves smaller than nmin may not be split
+    layer_nr <- layer_nr+1
+    tree_grow(tree, layer_nr, "left", df[df[,best_feat] <= node$split,], labels[df[,best_feat] <= node$split], nmin, minleaf, nfeat)
+  } 
+  if (nrc > nmin) {
+    layer_nr <- layer_nr+1
+    tree_grow(tree, layer_nr, "right", df[df[,best_feat] > node$split,], labels[df[,best_feat] > node$split], nmin, minleaf, nfeat)
+  }  
+  
+  
+}
+
+tree_pred <- function(x, tr){
+  # A new case is dropped down the tree and assigned to the majority class of each node it passes
+  # x: 2d array containing attribute values of cases for which prediction is required
+  # tr: tree object created in tree_grow
+  # Returns: 1d array with predicted class labels for cases in x
+}
+
+
+```
+
+
+## Test functions 
+
+```{r}
+
+ytest <- c(1,0,1,1,1,0,0,1,1,0,1)
+
+impurity(ytest)
+
+side <- "root"
+x <- credit[,1:ncol(credit)-1]
+y <- credit[,ncol(credit)]
+nmin <- 2
+minleaf <- 1
+nfeat <- ncol(credit)-1
+layer_nr <- 0
+
+bestsplit(values = credit[,4], labels = credit[,6], minleaf)
+
+
+tree <- tibble(
+  layer_nr = numeric(),
+  side = character(),
+  feat = character(),
+  imp_red = numeric(),
+  lc = list(),
+  lc_labs = list(),
+  rc = list(),
+  rc_labs = list(),
+  split = numeric())
+  
+
+tree_grow(tree, layer_nr, side, x, y, nmin, minleaf, nfeat)
+readRDS(file = "tree.rds")
+
+```
