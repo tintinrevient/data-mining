@@ -55,20 +55,6 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
         nodelist[[length(nodelist) + 1]] <- right_children
       }
       
-    } else {
-      
-      if (impurity_by_gini_index(current_node[,nfeat+1]) == 0) {
-        # If the current node is pure
-        # Append the current node as the terminal node to the tree model by its pure label.
-        tree_index <- tree_index + 1
-        tree_nodelist[[tree_index]] <- c(NA, NA, current_node[1,nfeat+1])
-        
-      } else {
-      	# If the current node is not pure
-        # Append the current node as the terminal node to the tree model by its majority of labels.
-        tree_index <- tree_index + 1
-        tree_nodelist[[tree_index]] <- c(NA, NA, vote_of_majority(current_node, nfeat+1))
-      }
     }
     
     # until nodelist = ∅
