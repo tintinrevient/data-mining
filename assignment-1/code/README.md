@@ -1,5 +1,7 @@
 # Code
 
+## Algorithm
+
 <p float="left">
   <img src="./pix/tree_grow.png" width="500">
 </p>
@@ -78,3 +80,10 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
   tree_nodelist
 }
 ```
+
+## Tree model
+
+<p float="left">
+  <img src="./pix/tree_model.png" width="500">
+</p>
+
