@@ -80,8 +80,7 @@ vote_of_majority <- function(table, index_of_y) {
 # Grow the classification tree
 tree_grow <- function(table, nmin, minleaf, nfeat) {
   
-  # Initialize the training data
-  # nodelist contains only one node, which is the whole table.
+  # nodelist <- {{training data}}
   nodelist <- list(table)
   
   # The model of the tree = a list of nodes
@@ -89,25 +88,21 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
   # For the non-terminal nodes, the vector is like c(the best feature, the best split point, NA)
   # For the terminal nodes, the vector is like c(NA, NA, the voted classified label)
   
-  # Initialize the model of the tree
+  # Initialize the model of the trained tree
   tree_nodelist <- list()
   tree_index <- 0
   
   repeat{
     
-    # Pop out the first node in the nodelist
+    # current_node <- select node from nodelist
     current_node <- nodelist[[1]]
+    # nodelist <- nodelist - current node
     nodelist[[1]] <- NULL
     
     # nfeat + 1 is the index of the class label in the table
     # e.g. nfeat = 5, and nfeat + 1 = 6 is the index of "class" in "credit.txt"
     
-    # Calculate the impurity of the current node
-    # Split conditions of a node are as below:
-    #  (1) if it is not pure;
-    #  (2) if it has equal to or more than nmin rows.
-    # If the impurity of the current node is greater than 0, it will continue to split till it is pure.
-    # If the nmin constrint is satisfied, the node can split, otherwise it will stop splitting.
+    # If impurity(current node) > 0 AND observations(current node) >= nmin, the current node is allowed to be split.
     if(impurity_by_gini_index(current_node[,nfeat+1]) > 0 && length(current_node[,1]) >= nmin) {
       
       # Find one best feature to split the data
@@ -116,9 +111,10 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
       feat.splitpoints.best <- NA
       feat.impurity.reduction.max <- 0
       
-      # Iterate through all the features specified by nfeat
-      # Find the feature whose reduction of impurity is the maximum and use this feature to split the node.
-      # What if there are multiple features whose reduction of impurity is the maximum???
+      # Iterate through the set of candidate splits in current node.
+      # Find the best split point of the best split feature with the maximum impurity reduction.
+      # S <- set of candidate splits in current node
+      # s* <- argmax impurity reduction(s, current node), where s is in S
       for(feat in 1:nfeat) {
         result <- bestsplit(current_node[,feat], current_node[,nfeat+1])
         
@@ -129,50 +125,52 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
         }
       }
       
-      # Apply the binary split, which results in the creation of the left and right children.
-      # left_children are the rows in the table, whose best-split feature is less than and equal to the best-split point.
+      # child nodes <- apply(s*, current node)
+      # left_children are the rows in the table, whose value of the best-split feature is less than and equal to the best-split point.
       left_children <- current_node[current_node[,feat.best] <= feat.splitpoints.best,]
-      # right_children are the rows in the table, whose best-split feature is greater than the best-split point.
+      # right_children are the rows in the table, whose value of the best-split feature is greater than the best-split point.
       right_children <- current_node[current_node[,feat.best] > feat.splitpoints.best,]
       
-      # Check minleaf constrint
-      # If either left_children or right_children doesn't meet this requirement, stop splitting.
-      # Else it will continue to split, and left_children and right_children will be appended in nodelist
+      # Check minleaf constraint
       if(length(left_children[,1]) < minleaf || length(right_children[,1]) < minleaf) {
-        # Append the terminal node into the tree model
+        # If observations(child nodes) < minleaf
+        # Stop splitting, and append the current node as the terminal node to the tree model.
         tree_index <- tree_index + 1
         tree_nodelist[[tree_index]] <- c(NA, NA, vote_of_majority(current_node, nfeat+1)) 
         next
       } else {
-        # Append the non-terminal node into the tree model
+        # If observations(child nodes) >= minleaf
+        # Split the current node into child nodes, and append the current node as the non-terminal node to the tree model.
         tree_index <- tree_index + 1
         tree_nodelist[[tree_index]] <- c(feat.best, feat.splitpoints.best, NA)
         
-        # Append left_children and right_children in nodelist
+        # nodelist <- nodelist + child nodes
         nodelist[[length(nodelist) + 1]] <- left_children
         nodelist[[length(nodelist) + 1]] <- right_children
       }
       
     } else {
       
-      # The terminal nodes of the tree model are different, which depend on whether the node is pure or not.
       if (impurity_by_gini_index(current_node[,nfeat+1]) == 0) {
-        # Append the terminal node into the tree model if the node is pure.
+        # If the current node is pure
+        # Append the current node as the terminal node to the tree model by its pure label.
         tree_index <- tree_index + 1
         tree_nodelist[[tree_index]] <- c(NA, NA, current_node[1,nfeat+1])
         
       } else {
-        # Append the terminal node into the tree model if the node is not pure.
+        # If the current node is not pure
+        # Append the current node as the terminal node to the tree model by its majority of labels.
         tree_index <- tree_index + 1
         tree_nodelist[[tree_index]] <- c(NA, NA, vote_of_majority(current_node, nfeat+1))
       }
     }
     
+    # until nodelist = ∅
     if(length(nodelist) == 0)
       break
   }
   
-  # Return the best split from the root to the leaves
+  # Return the model of the trained tree
   tree_nodelist
 }
 
