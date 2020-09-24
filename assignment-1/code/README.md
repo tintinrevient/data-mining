@@ -1,4 +1,4 @@
-### Code
+# Code
 
 <p float="left">
   <img src="./pix/tree_grow.png" width="500">
