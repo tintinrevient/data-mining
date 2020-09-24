@@ -42,9 +42,8 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
         nodelist[[length(nodelist) + 1]] <- left_children
         nodelist[[length(nodelist) + 1]] <- right_children
       }
-      
     }
-    
+
     # until nodelist = ∅
     if(length(nodelist) == 0)
       break
@@ -58,3 +57,9 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
   <img src="./pix/tree_model.png" width="500">
 </p>
 
+**tree_pred()** function uses the tree model to predict the label, and its data structure is a list of vectors as illustrated below:
+* list <- [c(4, 36, NA), c(1, 37, NA), c(NA, NA, 1), c(NA, NA, 0), c(2, 0.5, NA), c(NA, NA, 0), c(NA, NA, 1)]
+
+<p float="left">
+  <img src="./pix/tree_data_structure.png" width="800">
+</p>
