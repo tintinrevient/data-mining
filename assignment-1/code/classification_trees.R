@@ -67,7 +67,7 @@ vote_of_majority <- function(table, index_of_y) {
   vote_of_zero <- table[table[,index_of_y] == 0, ]
   vote_of_one <- table[table[,index_of_y] == 1, ]
   
-  if(length(vote_of_zero) > length(vote_of_one))
+  if(length(vote_of_zero[,1]) > length(vote_of_one[,1]))
     0
   else
     1
@@ -185,11 +185,11 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
 # credit.tr
 
 # Test for the tree_grow function based on "pima.txt"
-# pima.dat <- read.csv("./data/pima.txt")
-# nmin <- 20
-# minleaf <- 5
-# nfeat <- 8
-# pima.tr <- tree_grow(pima.dat, nmin, minleaf, nfeat)
+pima.dat <- read.csv("./data/pima.txt")
+nmin <- 20
+minleaf <- 5
+nfeat <- 8
+pima.tr <- tree_grow(pima.dat, nmin, minleaf, nfeat)
 
 # Predict the class label based on the model of the tree returned by tree_grow()
 # x: predictors
@@ -245,4 +245,23 @@ confusion_matrix <- function(table, nfeat, tr) {
 }
 
 # Confusion matrix based on "pima.txt"
-confusion_matrix(pima.dat, 8, pima.tr)
+pima.tr.perf <- confusion_matrix(pima.dat, 8, pima.tr)
+pima.tr.perf
+
+# Comparison with the decision tree generated from rpart
+# The data is based on "pima.txt"
+# tree_grow
+# library(rpart)
+# pima.dtree <- rpart(X1 ~ ., data = pima.dat, method = "class", parms = list(split = "information"))
+# summary(pima.dtree)
+
+# plot the model of the decision tree
+# library(rpart.plot)
+# prp(pima.dtree, type = 2, extra = 104, fallen.leaves = TRUE, main = "Decision Tree")
+
+# tree_pred
+# pima.dtree.pred <- predict(pima.dtree, pima.dat, type = "class")
+# pima.dtree.perf <- table(pima.dat$X1, pima.dtree.pred, dnn = c("Actual", "Predicted"))
+# pima.dtree.perf
+
+
