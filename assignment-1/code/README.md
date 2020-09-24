@@ -13,10 +13,6 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
   # nodelist <- {{training data}}
   nodelist <- list(table)
   
-  # the model of the trained tree
-  tree_nodelist <- list()
-  tree_index <- 0
-  
   repeat{
     
     # current_node <- select node from nodelist
@@ -39,18 +35,10 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
       
       # Check minleaf constraint
       if(length(left_children[,1]) < minleaf || length(right_children[,1]) < minleaf) {
-      	# If observations(child nodes) < minleaf
-        # Stop splitting, and append the current node as the terminal node to the tree model.
-        tree_index <- tree_index + 1
-        tree_nodelist[[tree_index]] <- c(NA, NA, vote_of_majority(current_node, nfeat+1)) 
+      	# If observations(child nodes) < minleaf, stop splitting
         next
       } else {
-        # If observations(child nodes) >= minleaf
-        # Split the current node into child nodes, and append the current node as the non-terminal node to the tree model.
-        tree_index <- tree_index + 1
-        tree_nodelist[[tree_index]] <- c(feat.best, feat.splitpoints.best, NA)
-        
-        # nodelist <- nodelist + child nodes
+        # If observations(child nodes) >= minleaf, nodelist <- nodelist + child nodes
         nodelist[[length(nodelist) + 1]] <- left_children
         nodelist[[length(nodelist) + 1]] <- right_children
       }
@@ -61,9 +49,6 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
     if(length(nodelist) == 0)
       break
   }
-  
-  # Return the model of the trained tree
-  tree_nodelist
 }
 ```
 
