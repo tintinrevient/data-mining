@@ -114,7 +114,7 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
       # Iterate through the set of candidate splits in current node.
       # Find the best split point of the best split feature with the maximum impurity reduction.
       # S <- set of candidate splits in current node
-      # s* <- argmax impurity reduction(s, current node), where s is in S
+      # s* <- argmax {impurity reduction(s, current node)}, where s is in S
       for(feat in 1:nfeat) {
         result <- bestsplit(current_node[,feat], current_node[,nfeat+1])
         
