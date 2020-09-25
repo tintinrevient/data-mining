@@ -20,7 +20,7 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
     # nodelist <- nodelist - current node
     nodelist[[1]] <- NULL
     
-    # If impurity(current node) > 0 AND observations(current node) >= nmin, the current node is allowed to be split.
+    # if impurity(current node) > 0 AND observations(current node) >= nmin, the current node is allowed to be split.
     if(impurity_by_gini_index(current_node[,nfeat+1]) > 0 && length(current_node[,1]) >= nmin) {
       
       # S <- set of candidate splits in current node
@@ -33,12 +33,12 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
       left_children <- current_node[current_node[,feat.best] <= feat.splitpoints.best,]
       right_children <- current_node[current_node[,feat.best] > feat.splitpoints.best,]
       
-      # Check minleaf constraint
+      # check minleaf constraint
       if(length(left_children[,1]) < minleaf || length(right_children[,1]) < minleaf) {
-      	# If observations(child nodes) < minleaf, stop splitting
+      	# if observations(child nodes) < minleaf, stop splitting
         next
       } else {
-        # If observations(child nodes) >= minleaf, nodelist <- nodelist + child nodes
+        # if observations(child nodes) >= minleaf, nodelist <- nodelist + child nodes
         nodelist[[length(nodelist) + 1]] <- left_children
         nodelist[[length(nodelist) + 1]] <- right_children
       }
