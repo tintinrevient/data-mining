@@ -63,3 +63,11 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
 <p float="left">
   <img src="./pix/tree_data_structure.png" width="800">
 </p>
+
+## Test
+
+**rpart()** generates below decision tree based on the dataset "pima.txt":
+
+<p float="left">
+  <img src="./pix/pima_decision_tree.png" width="500">
+</p>
