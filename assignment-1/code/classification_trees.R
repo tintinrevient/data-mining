@@ -435,10 +435,10 @@ confusion_matrix_b <- function(table, nfeat, index_of_y, trees) {
 }
 
 # confusion matrix based on "pima.txt"
-nfeat <- c(1:8)
-index_of_y <- 9
-pima.tr.perf <- confusion_matrix(pima.dat, nfeat, index_of_y, pima.tr)
-pima.tr.perf
+# nfeat <- c(1:8)
+# index_of_y <- 9
+# pima.tr.perf <- confusion_matrix(pima.dat, nfeat, index_of_y, pima.tr)
+# pima.tr.perf
 
 # confusion matrix based on "pima.txt" by the bagging with random forest
 nfeat <- c(1:8)
