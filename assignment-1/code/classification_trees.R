@@ -19,6 +19,14 @@ bestsplit <- function(x, y) {
   
   x.sorted <- sort(unique(x))
   x.sorted.length <- length(x.sorted)
+  
+  # if there is only one unique value in x
+  # the maximum impurity reduction is 0
+  # the best split point is NA
+  if(x.sorted.length < 2) {
+    return(c(0, NA))
+  }
+  
   # e.g. x = c(1, 2, 3, 4, 5): x has 5 values, and thus x has (5 - 1) = 4 split points.
   # x.splitpoints = (c(1, 2, 3, 4) + c(2, 3, 4, 5)) / 2
   x.splitpoints <- (x.sorted[1:x.sorted.length-1] + x.sorted[2:x.sorted.length]) / 2
@@ -60,13 +68,13 @@ bestsplit <- function(x, y) {
 # result[2]
 
 # calcuate the classified label by the vote of the majority of nodes
-# table = the dataset containing the predictors and the label
+# table = the dataset containing the predictors and the label = 2D matrix
 # index_of_y = the index of the label in the table
 # e.g. table = credit.dat = c(age, married, house, income, gender, class)
 # age, married, house, income, gender -> predictors
 # class -> label
 # index_of_y is 6, and the starting index is 1 instead of 0.
-vote_of_majority <- function(table, index_of_y) {
+vote_of_majority_matrix <- function(table, index_of_y) {
   
   vote_of_zero <- table[table[,index_of_y] == 0, ]
   vote_of_one <- table[table[,index_of_y] == 1, ]
@@ -79,7 +87,25 @@ vote_of_majority <- function(table, index_of_y) {
 
 # test for the vote of majority
 # the right answer is 1
-# vote_of_majority(credit.dat, 6)
+# vote_of_majority_matrix(credit.dat, 6)
+
+# calcuate the classified label by the vote of the majority of predictions
+# vector = 1D vector of all the predictions
+vote_of_majority_vector <- function(vector) {
+  
+  vote_of_zero <- vector[vector == 0]
+  vote_of_one <- vector[vector == 1]
+  
+  if(length(vote_of_zero) > length(vote_of_one))
+    0
+  else
+    1
+}
+
+# test for the vote of majority
+# the right answer is 1
+# preds <- c(1, 1, 1, 0, 1, 0)
+# vote_of_majority_vector(preds)
 
 # grow the classification tree
 
@@ -136,6 +162,12 @@ tree_grow <- function(table, index_of_y, nmin, minleaf, nfeat) {
       for(feat in nfeat) {
         result <- bestsplit(current_node[,feat], current_node[,index_of_y])
         
+        # if there does not exist the best split for the current feature
+        # continue to the next feature
+        if(result[1] == 0 && is.na(result[2])) {
+          next
+        }
+                
         if(result[1] > feat.impurity.reduction.max) {
           feat.impurity.reduction.max <- result[1]
           feat.splitpoints.best <- result[2]
@@ -143,6 +175,14 @@ tree_grow <- function(table, index_of_y, nmin, minleaf, nfeat) {
         }
       }
       
+      # if there does not exist the best feature to split the node
+      # stop splitting, and append the current node as the terminal node to the tree model. 
+      if(is.na(feat.best) || is.na(feat.splitpoints.best)) {
+        tree_node_index <- tree_node_index + 1
+        tree[[tree_node_index]] <- c(NA, NA, vote_of_majority_matrix(current_node, index_of_y), NA, NA) 
+        next
+      }
+
       # child nodes <- apply(s*, current node)
       # left_children are the rows in the table, whose value of the best-split feature is less than and equal to the best-split point.
       left_children <- current_node[current_node[,feat.best] <= feat.splitpoints.best,]
@@ -154,7 +194,7 @@ tree_grow <- function(table, index_of_y, nmin, minleaf, nfeat) {
         # if observations(child nodes) < minleaf
         # stop splitting, and append the current node as the terminal node to the tree model.
         tree_node_index <- tree_node_index + 1
-        tree[[tree_node_index]] <- c(NA, NA, vote_of_majority(current_node, index_of_y), NA, NA) 
+        tree[[tree_node_index]] <- c(NA, NA, vote_of_majority_matrix(current_node, index_of_y), NA, NA) 
         next
       } else {
         # if observations(child nodes) >= minleaf
@@ -179,7 +219,7 @@ tree_grow <- function(table, index_of_y, nmin, minleaf, nfeat) {
         # if the current node is not pure:
         # append the current node as the terminal node to the tree model by its majority of labels.
         tree_node_index <- tree_node_index + 1
-        tree[[tree_node_index]] <- c(NA, NA, vote_of_majority(current_node, index_of_y), NA, NA)
+        tree[[tree_node_index]] <- c(NA, NA, vote_of_majority_matrix(current_node, index_of_y), NA, NA)
       }
     }
   }
@@ -198,13 +238,13 @@ tree_grow <- function(table, index_of_y, nmin, minleaf, nfeat) {
 # credit.tr
 
 # test for the tree_grow function based on "pima.txt"
-pima.dat <- read.csv("./data/pima.txt")
-index_of_y <- 9
-nmin <- 20
-minleaf <- 5
-nfeat <- c(1:8)
-pima.tr <- tree_grow(pima.dat, index_of_y, nmin, minleaf, nfeat)
-pima.tr
+# pima.dat <- read.csv("./data/pima.txt")
+# index_of_y <- 9
+# nmin <- 20
+# minleaf <- 5
+# nfeat <- c(1:8)
+# pima.tr <- tree_grow(pima.dat, index_of_y, nmin, minleaf, nfeat)
+# pima.tr
 
 # get all the descendants of a tree from a specific node index, including itself.
 get_all_descendants <- function(node_index, tr) {
@@ -292,22 +332,6 @@ tree_pred <- function(x, tr) {
 # label <- tree_pred(x, pima.tr)
 # label
 
-# display the confusion matrix based on the table and the tree model
-confusion_matrix <- function(table, nfeat, index_of_y, tr) {
-  pred <- c()
-  for(i in 1:length(table[,1])) {
-    pred <- c(pred, tree_pred(table[i, nfeat], tr))
-  }
-  
-  table(table[,index_of_y], pred, dnn = c("Actual", "Predicted"))
-}
-
-# confusion matrix based on "pima.txt"
-nfeat <- c(1:8)
-index_of_y <- 9
-pima.tr.perf <- confusion_matrix(pima.dat, nfeat, index_of_y, pima.tr)
-pima.tr.perf
-
 # comparison with the decision tree generated from rpart
 # the data is based on "pima.txt"
 # tree_grow
@@ -324,7 +348,7 @@ pima.tr.perf
 # pima.dtree.perf <- table(pima.dat$X1, pima.dtree.pred, dnn = c("Actual", "Predicted"))
 # pima.dtree.perf
 
-# grow the classification tree by Bagging
+# grow the classification tree by the bagging with random forest
 # length(nfeat) < the total number of predictors: e.g. nfeat = c(1, 2, 4) out of c(1, 2, 3, 4, 5)
 # m = the number of bootstrap samples to be drawn
 # sample_size = the size of one bootstrap sample (training set) < the size of table
@@ -339,7 +363,7 @@ tree_grow_b <- function(table, index_of_y, nmin, minleaf, nfeat, m, sample_size)
     indices <- sample(length(table[,1]), sample_size, replace = TRUE)
     
     # random forest: randomly select a subset of nfeat
-    num_of_predictors <- floor(runif(1, min=1, max=length(nfeat) + 1))
+    num_of_predictors <- floor(runif(1, min=1, max=length(nfeat)))
     sample_of_nfeat <- sample(nfeat, num_of_predictors)
     
     # grow a tree on this sample
@@ -360,11 +384,64 @@ index_of_y <- 9
 nmin <- 20
 minleaf <- 5
 nfeat <- c(1:8)
-m <- 5
-sample_size <- 500
+m <- 100
+sample_size <- 700
 pima.trees <- tree_grow_b(pima.dat, index_of_y, nmin, minleaf, nfeat, m, sample_size)
 
 # predict the class label based on the voting of all the trees returned by tree_grow_b()
 tree_pred_b <- function(x, trees) {
+  # predictions of all the trees
+  predictions <- c()
   
+  # iterate through all the trees to calculate the predictions
+  for(tr in trees) {
+    pred <- tree_pred(x, tr)
+    predictions <- c(predictions, pred)
+  }
+  
+  # return the majority vote of all the trees
+  vote_of_majority_vector(predictions)
 }
+
+# test for the tree_pred function based on "pima.txt"
+# the right answer is: label = 1
+# x <- c(6,148,72,35,0,33.6,0.627,50)
+# label <- tree_pred_b(x, pima.trees)
+# label
+
+# the right answer is: label = 0
+# x <- c(1,100,66,29,196,32.0,0.444,42)
+# label <- tree_pred_b(x, pima.trees)
+# label
+
+# display the confusion matrix based on the table and the tree model
+confusion_matrix <- function(table, nfeat, index_of_y, tr) {
+  predictions <- c()
+  for(i in 1:length(table[,1])) {
+    predictions <- c(predictions, tree_pred(table[i, nfeat], tr))
+  }
+  
+  table(table[,index_of_y], predictions, dnn = c("Actual", "Predicted"))
+}
+
+# display the confusion matrix based on the table by the bagging with random forest
+confusion_matrix_b <- function(table, nfeat, index_of_y, trees) {
+  predictions <- c()
+  for(i in 1:length(table[,1])) {
+    predictions <- c(predictions, tree_pred_b(table[i, nfeat], trees))
+  }
+  
+  table(table[,index_of_y], predictions, dnn = c("Actual", "Predicted"))
+}
+
+# confusion matrix based on "pima.txt"
+nfeat <- c(1:8)
+index_of_y <- 9
+pima.tr.perf <- confusion_matrix(pima.dat, nfeat, index_of_y, pima.tr)
+pima.tr.perf
+
+# confusion matrix based on "pima.txt" by the bagging with random forest
+nfeat <- c(1:8)
+index_of_y <- 9
+pima.trees.perf <- confusion_matrix_b(pima.dat, nfeat, index_of_y, pima.trees)
+pima.trees.perf
