@@ -60,8 +60,12 @@ bestsplit <- function(x, y) {
 # result[2]
 
 # calcuate the classified label by the vote of the majority of nodes
-# index_of_y is the index of the label in the table
-# e.g. table is c(age, married, house, income, gender, class), index_of_y is 6, and the starting index is 1 instead of 0.
+# table = the dataset containing the predictors and the label
+# index_of_y = the index of the label in the table
+# e.g. table = credit.dat = c(age, married, house, income, gender, class)
+# age, married, house, income, gender -> predictors
+# class -> label
+# index_of_y is 6, and the starting index is 1 instead of 0.
 vote_of_majority <- function(table, index_of_y) {
   
   vote_of_zero <- table[table[,index_of_y] == 0, ]
@@ -78,7 +82,18 @@ vote_of_majority <- function(table, index_of_y) {
 # vote_of_majority(credit.dat, 6)
 
 # grow the classification tree
-tree_grow <- function(table, nmin, minleaf, nfeat) {
+
+# table = the dataset containing the predictors and the label
+# index_of_y = the index of the label in the table
+# e.g. table = credit.dat = c(age, married, house, income, gender, class)
+# age, married, house, income, gender -> predictors
+# class -> label
+# index_of_y is 6, and the starting index is 1 instead of 0.
+
+# nmin = the minimum number of observations that a node must contain
+# minleaf = the minimum number of observations required for a leaf node
+# nfeat = the range of predictors, e.g. nfeat = c(1, 2, 3, 4, 5) or nfeat = c(1, 2, 4)
+tree_grow <- function(table, index_of_y, nmin, minleaf, nfeat) {
   
   # nodelist <- {{training data}}
   nodelist <- list(table)
@@ -90,8 +105,8 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
   # for the terminal nodes, the vector is like c(NA, NA, the voted classified label, NA, NA)
   
   # initialize the model of the trained tree
-  tree_nodelist <- list()
-  tree_index <- 0
+  tree <- list()
+  tree_node_index <- 0
   
   repeat{
     
@@ -105,11 +120,8 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
     # nodelist <- nodelist - current node
     nodelist[[1]] <- NULL
     
-    # nfeat + 1 is the index of the class label in the table
-    # e.g. nfeat = 5, and nfeat + 1 = 6 is the index of "class" in "credit.txt"
-    
     # if impurity(current node) > 0 AND observations(current node) >= nmin, the current node is allowed to be split.
-    if(impurity_by_gini_index(current_node[,nfeat+1]) > 0 && length(current_node[,1]) >= nmin) {
+    if(impurity_by_gini_index(current_node[,index_of_y]) > 0 && length(current_node[,1]) >= nmin) {
       
       # Find one best feature to split the data
       # Feature is represented by its index in the table
@@ -121,8 +133,8 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
       # find the best split point of the best split feature with the maximum impurity reduction.
       # S <- set of candidate splits in current node
       # s* <- argmax {impurity reduction(s, current node)}, where s is in S
-      for(feat in 1:nfeat) {
-        result <- bestsplit(current_node[,feat], current_node[,nfeat+1])
+      for(feat in nfeat) {
+        result <- bestsplit(current_node[,feat], current_node[,index_of_y])
         
         if(result[1] > feat.impurity.reduction.max) {
           feat.impurity.reduction.max <- result[1]
@@ -141,14 +153,14 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
       if(length(left_children[,1]) < minleaf || length(right_children[,1]) < minleaf) {
         # if observations(child nodes) < minleaf
         # stop splitting, and append the current node as the terminal node to the tree model.
-        tree_index <- tree_index + 1
-        tree_nodelist[[tree_index]] <- c(NA, NA, vote_of_majority(current_node, nfeat+1), NA, NA) 
+        tree_node_index <- tree_node_index + 1
+        tree[[tree_node_index]] <- c(NA, NA, vote_of_majority(current_node, index_of_y), NA, NA) 
         next
       } else {
         # if observations(child nodes) >= minleaf
         # split the current node into child nodes, and append the current node as the non-terminal node to the tree model.
-        tree_index <- tree_index + 1
-        tree_nodelist[[tree_index]] <- c(feat.best, feat.splitpoints.best, NA, current_node_index + length(nodelist) + 1, current_node_index + length(nodelist) + 2)
+        tree_node_index <- tree_node_index + 1
+        tree[[tree_node_index]] <- c(feat.best, feat.splitpoints.best, NA, current_node_index + length(nodelist) + 1, current_node_index + length(nodelist) + 2)
         
         # nodelist <- nodelist + child nodes
         nodelist[[length(nodelist) + 1]] <- left_children
@@ -157,39 +169,42 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
       
     } else {
       
-      if (impurity_by_gini_index(current_node[,nfeat+1]) == 0) {
+      if (impurity_by_gini_index(current_node[,index_of_y]) == 0) {
         # if the current node is pure:
         # append the current node as the terminal node to the tree model by its pure label.
-        tree_index <- tree_index + 1
-        tree_nodelist[[tree_index]] <- c(NA, NA, current_node[1,nfeat+1], NA, NA)
+        tree_node_index <- tree_node_index + 1
+        tree[[tree_node_index]] <- c(NA, NA, current_node[1,index_of_y], NA, NA)
         
       } else {
         # if the current node is not pure:
         # append the current node as the terminal node to the tree model by its majority of labels.
-        tree_index <- tree_index + 1
-        tree_nodelist[[tree_index]] <- c(NA, NA, vote_of_majority(current_node, nfeat+1), NA, NA)
+        tree_node_index <- tree_node_index + 1
+        tree[[tree_node_index]] <- c(NA, NA, vote_of_majority(current_node, index_of_y), NA, NA)
       }
     }
   }
   
   # return the model of the trained tree
-  tree_nodelist
+  tree
 }
 
 # test for the tree_grow function based on "credit.txt"
 # credit.dat <- read.csv("./data/credit.txt")
+# index_of_y <- 6
 # nmin <- 2
 # minleaf <- 1
-# nfeat <- 5
-# credit.tr <- tree_grow(credit.dat, nmin, minleaf, nfeat)
+# nfeat <- c(1:5)
+# credit.tr <- tree_grow(credit.dat, index_of_y, nmin, minleaf, nfeat)
 # credit.tr
 
 # test for the tree_grow function based on "pima.txt"
 pima.dat <- read.csv("./data/pima.txt")
+index_of_y <- 9
 nmin <- 20
 minleaf <- 5
-nfeat <- 8
-pima.tr <- tree_grow(pima.dat, nmin, minleaf, nfeat)
+nfeat <- c(1:8)
+pima.tr <- tree_grow(pima.dat, index_of_y, nmin, minleaf, nfeat)
+pima.tr
 
 # get all the descendants of a tree from a specific node index, including itself.
 get_all_descendants <- function(node_index, tr) {
@@ -278,17 +293,19 @@ tree_pred <- function(x, tr) {
 # label
 
 # display the confusion matrix based on the table and the tree model
-confusion_matrix <- function(table, nfeat, tr) {
+confusion_matrix <- function(table, nfeat, index_of_y, tr) {
   pred <- c()
   for(i in 1:length(table[,1])) {
-    pred <- c(pred, tree_pred(table[i,1:nfeat], tr))
+    pred <- c(pred, tree_pred(table[i, nfeat], tr))
   }
   
-  table(table[,nfeat+1], pred, dnn = c("Actual", "Predicted"))
+  table(table[,index_of_y], pred, dnn = c("Actual", "Predicted"))
 }
 
 # confusion matrix based on "pima.txt"
-pima.tr.perf <- confusion_matrix(pima.dat, 8, pima.tr)
+nfeat <- c(1:8)
+index_of_y <- 9
+pima.tr.perf <- confusion_matrix(pima.dat, nfeat, index_of_y, pima.tr)
 pima.tr.perf
 
 # comparison with the decision tree generated from rpart
@@ -306,3 +323,48 @@ pima.tr.perf
 # pima.dtree.pred <- predict(pima.dtree, pima.dat, type = "class")
 # pima.dtree.perf <- table(pima.dat$X1, pima.dtree.pred, dnn = c("Actual", "Predicted"))
 # pima.dtree.perf
+
+# grow the classification tree by Bagging
+# length(nfeat) < the total number of predictors: e.g. nfeat = c(1, 2, 4) out of c(1, 2, 3, 4, 5)
+# m = the number of bootstrap samples to be drawn
+# sample_size = the size of one bootstrap sample (training set) < the size of table
+tree_grow_b <- function(table, index_of_y, nmin, minleaf, nfeat, m, sample_size) {
+  # a list of m different trees
+  trees <- list()
+  tree_index <- 0
+  
+  # draw m samples with replacement from "table"
+  for(i in 1:m) {
+    # draw a sample (training set) with replacement from "table"
+    indices <- sample(length(table[,1]), sample_size, replace = TRUE)
+    
+    # random forest: randomly select a subset of nfeat
+    num_of_predictors <- floor(runif(1, min=1, max=length(nfeat) + 1))
+    sample_of_nfeat <- sample(nfeat, num_of_predictors)
+    
+    # grow a tree on this sample
+    tr <- tree_grow(table[indices,], index_of_y, nmin, minleaf, sample_of_nfeat)
+    
+    # append this tree to the list of trees
+    tree_index <- tree_index + 1
+    trees[[tree_index]] <- tr
+  }
+  
+  # return the list of m different trees
+  trees
+}
+
+# test for the tree_grow_b function based on "pima.txt"
+pima.dat <- read.csv("./data/pima.txt")
+index_of_y <- 9
+nmin <- 20
+minleaf <- 5
+nfeat <- c(1:8)
+m <- 5
+sample_size <- 500
+pima.trees <- tree_grow_b(pima.dat, index_of_y, nmin, minleaf, nfeat, m, sample_size)
+
+# predict the class label based on the voting of all the trees returned by tree_grow_b()
+tree_pred_b <- function(x, trees) {
+  
+}
