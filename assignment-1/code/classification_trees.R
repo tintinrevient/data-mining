@@ -95,6 +95,10 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
   
   repeat{
     
+    # until nodelist = ∅
+    if(length(nodelist) == 0)
+      break
+    
     # current_node <- select node from nodelist
     current_node <- nodelist[[1]]
     current_node_index <- current_node_index + 1
@@ -166,10 +170,6 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
         tree_nodelist[[tree_index]] <- c(NA, NA, vote_of_majority(current_node, nfeat+1), NA, NA)
       }
     }
-    
-    # until nodelist = ∅
-    if(length(nodelist) == 0)
-      break
   }
   
   # return the model of the trained tree
@@ -185,11 +185,11 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
 # credit.tr
 
 # test for the tree_grow function based on "pima.txt"
-# pima.dat <- read.csv("./data/pima.txt")
-# nmin <- 20
-# minleaf <- 5
-# nfeat <- 8
-# pima.tr <- tree_grow(pima.dat, nmin, minleaf, nfeat)
+pima.dat <- read.csv("./data/pima.txt")
+nmin <- 20
+minleaf <- 5
+nfeat <- 8
+pima.tr <- tree_grow(pima.dat, nmin, minleaf, nfeat)
 
 # get all the descendants of a tree from a specific node index, including itself.
 get_all_descendants <- function(node_index, tr) {
