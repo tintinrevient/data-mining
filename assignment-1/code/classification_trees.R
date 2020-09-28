@@ -335,7 +335,9 @@ tree_pred <- function(x, tr) {
 # comparison with the decision tree generated from rpart
 # the data is based on "pima.txt"
 # tree_grow
+# pima.dat <- read.csv("./data/pima.txt")
 # library(rpart)
+# set.seed(1234)
 # pima.dtree <- rpart(X1 ~ ., data = pima.dat, method = "class", parms = list(split = "information"))
 # summary(pima.dtree)
 
@@ -352,7 +354,7 @@ tree_pred <- function(x, tr) {
 # length(nfeat) < the total number of predictors: e.g. nfeat = c(1, 2, 4) out of c(1, 2, 3, 4, 5)
 # m = the number of bootstrap samples to be drawn
 # sample_size = the size of one bootstrap sample (training set) < the size of table
-tree_grow_b <- function(table, index_of_y, nmin, minleaf, nfeat, m, sample_size) {
+tree_grow_b <- function(table, index_of_y, nmin, minleaf, nfeat, m, sample_size, nfeat_subset_size) {
   # a list of m different trees
   trees <- list()
   tree_index <- 0
@@ -363,8 +365,12 @@ tree_grow_b <- function(table, index_of_y, nmin, minleaf, nfeat, m, sample_size)
     indices <- sample(length(table[,1]), sample_size, replace = TRUE)
     
     # random forest: randomly select a subset of nfeat
-    num_of_predictors <- floor(runif(1, min=1, max=length(nfeat)))
-    sample_of_nfeat <- sample(nfeat, num_of_predictors)
+    # the size of the subset is random between 1 and length(nfeat) - 1
+    # num_of_predictors <- floor(runif(1, min=1, max=length(nfeat)))
+    # sample_of_nfeat <- sample(nfeat, num_of_predictors)
+    
+    # the size of the subset is fixed
+    sample_of_nfeat <- sample(nfeat, nfeat_subset_size)
     
     # grow a tree on this sample
     tr <- tree_grow(table[indices,], index_of_y, nmin, minleaf, sample_of_nfeat)
@@ -386,7 +392,8 @@ minleaf <- 5
 nfeat <- c(1:8)
 m <- 100
 sample_size <- 700
-pima.trees <- tree_grow_b(pima.dat, index_of_y, nmin, minleaf, nfeat, m, sample_size)
+nfeat_subset_size <- 6
+pima.trees <- tree_grow_b(pima.dat, index_of_y, nmin, minleaf, nfeat, m, sample_size, nfeat_subset_size)
 
 # predict the class label based on the voting of all the trees returned by tree_grow_b()
 tree_pred_b <- function(x, trees) {
@@ -403,7 +410,7 @@ tree_pred_b <- function(x, trees) {
   vote_of_majority_vector(predictions)
 }
 
-# test for the tree_pred function based on "pima.txt"
+# test for the tree_pred_b function based on "pima.txt"
 # the right answer is: label = 1
 # x <- c(6,148,72,35,0,33.6,0.627,50)
 # label <- tree_pred_b(x, pima.trees)
@@ -413,6 +420,23 @@ tree_pred_b <- function(x, trees) {
 # x <- c(1,100,66,29,196,32.0,0.444,42)
 # label <- tree_pred_b(x, pima.trees)
 # label
+
+# comparison with the random forest generated from randomForest
+# the data is based on "pima.txt"
+# tree_grow_b
+# pima.dat <- read.csv("./data/pima.txt")
+# library(randomForest)
+# set.seed(1234)
+# pima.forest <- randomForest(X1 ~ ., data = pima.dat, na.action = na.roughfix, importance = TRUE)
+# pima.forest
+
+# determine variable importance
+# importance(pima.forest, type = 2)
+
+# tree_pred_b
+# pima.forest.pred <- predict(pima.forest, pima.dat, type = "class")
+# pima.forest.perf <- table(pima.dat$X1, pima.forest.pred, dnn = c("Actual", "Predicted"))
+# pima.forest.perf
 
 # display the confusion matrix based on the table and the tree model
 confusion_matrix <- function(table, nfeat, index_of_y, tr) {
