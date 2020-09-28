@@ -66,8 +66,21 @@ tree_grow <- function(table, nmin, minleaf, nfeat) {
 
 ## Test
 
-**rpart()** generates below decision tree based on the dataset "pima.txt":
+**rpart()** function generates below decision tree based on the dataset "pima.txt":
 
 <p float="left">
   <img src="./pix/pima_decision_tree.png" width="800">
 </p>
+
+**randomForest()** function generates below forest based on the dataset "pima.txt":
+
+```
+Call:
+ randomForest(formula = X1 ~ ., data = pima.dat, importance = TRUE,      na.action = na.roughfix) 
+               Type of random forest: regression
+                     Number of trees: 500
+No. of variables tried at each split: 2
+
+          Mean of squared residuals: 0.1594159
+                    % Var explained: 29.75
+```
