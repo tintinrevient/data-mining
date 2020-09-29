@@ -1,0 +1,91 @@
+---
+title: "tree_test"
+author: "Fleur Petit"
+date: "29/09/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+setwd("G:/My Drive/UU/Masters/Year_3/Data_mining/assignments")
+pima.dat <- read.delim("pima.txt", sep = ",")
+credit.dat <- read.delim("credit.txt", sep = ",")
+
+source("tree.R")
+```
+
+# Test functions: 
+ 
+## tree_grow
+ 
+### Example input credit
+
+```{r}
+nmin <- 2
+minleaf <- 1
+nfeat <- ncol(credit.dat)-1
+x <- credit.dat[,1:ncol(credit.dat)-1]
+y <- credit.dat[,ncol(credit.dat)]
+
+tree_grow(x, y, nmin, minleaf, nfeat)
+```
+
+### Example input pima
+
+```{r}
+nmin <- 20
+minleaf <- 5
+nfeat <- ncol(pima.dat)-1
+x <- pima.dat[,1:ncol(pima.dat)-1]
+y <- pima.dat[,ncol(pima.dat)]
+
+tree_grow(x, y, nmin, minleaf, nfeat)
+```
+
+## tree_predict
+
+### Example input credit
+
+```{r}
+nmin <- 2
+minleaf <- 1
+nfeat <- ncol(credit.dat)-1
+x <- credit.dat[,1:ncol(credit.dat)-1]
+y <- credit.dat[,ncol(credit.dat)]
+tr <- tree_grow(x, y, nmin, minleaf, nfeat)
+
+y_hat <- tree_pred(x, tr)
+y_hat
+```
+
+### Example input pima
+
+```{r}
+nmin <- 20
+minleaf <- 5
+nfeat <- ncol(pima.dat)-1
+x <- pima.dat[,1:ncol(pima.dat)-1]
+y <- pima.dat[,ncol(pima.dat)]
+tr <- tree_grow(x, y, nmin, minleaf, nfeat)
+
+y_hat <- tree_pred(x, tr)
+y_hat
+```
+
+## Bagging and random forrest
+
+### Example input credit
+
+```{r}
+nmin <- 2
+minleaf <- 1
+nfeat <- ncol(credit.dat)-sample((ncol(credit.dat)-1), 1)
+x <- credit.dat[,1:ncol(credit.dat)-1]
+y <- credit.dat[,ncol(credit.dat)]
+trs <- tree_grow_b(x, y, nmin, minleaf, nfeat, 3)
+
+y_hat <- tree_pred_b(x, trs)
+y_hat
+```
+
