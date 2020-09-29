@@ -1,7 +1,3 @@
-# setwd("G:/My Drive/UU/Masters/Year_3/Data_mining/assignments")
-# pima.dat <- read.delim("pima.txt", sep = ",")
-# credit.dat <- read.delim("credit.txt", sep = ",")
-
 # Compute the impurity
 impurity <- function(y) {
   p0t <- length(y[y == 0])/length(y)
@@ -100,9 +96,9 @@ bestsplit <- function(x, y, minleaf = 0) {
 # Returns: tree object 
 
 tree_grow <- function(x, y, nmin, minleaf, nfeat) {
-  which_feats <- sort(sample(1:ncol(x), nfeat)) # get a random sample of n of the feats
+  which_feats <- sample(1:ncol(x), nfeat) # get a random sample of n of the feats
   #  S <- sapply(feats[, which_feats, drop = F], function(feat) bestsplit(feat, labels, minleaf = 1)) # Splits per feat
-  nodelist <- list(root = cbind(x[, which_feats, drop = F], y)) # Entire training data frame
+  nodelist <- list(root = cbind(x[, which_feats, drop = F], y)) # Entire training data frame, select only the colums given by which_feat and the labels
   current_location <- 0 # node location, I number possible locations startinf with the root as 0, 1 and 2 for the roots potential children
   # 3,4 and 5,6 for the children of the left and the right child of the root respectively, etcetera
   
@@ -124,20 +120,22 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
     # nmin is the number of observations that a node must contain at least, for it to be allowed to be split.
     if (impurity(y)>0 & nrow(current_node) >= nmin){
       S <- sapply(x[, , drop = F], function(feat) bestsplit(feat, y, minleaf = 1))
-      s_star <- S[1,which.max(S[2,])]
-      split <- c(split, s_star)
-      feat_name <- c(feat_name, names(s_star))
-      left_child <- current_node[current_node[,names(s_star)] <= s_star[[1]],]
-      right_child <- current_node[current_node[,names(s_star)] > s_star[[1]],]
-      nl <- nrow(left_child)
-      nr <- nrow(right_child)
-
-      if(nrow(current_node) >= nmin){
-        majority_left <- c(majority_left, get_mode(left_child[,ncol(left_child)]))
-        majority_right <- c(majority_right, get_mode(right_child[,ncol(right_child)]))
-        nodelist <- c(nodelist, list(left_child), list(right_child))
-        location <- c(location, current_location)
-      } 
+      if(any(!is.na(S))){
+        s_star <- S[1,which.max(S[2,])]
+        split <- c(split, s_star)
+        feat_name <- c(feat_name, names(s_star))
+        left_child <- current_node[current_node[,names(s_star)] <= s_star[[1]],]
+        right_child <- current_node[current_node[,names(s_star)] > s_star[[1]],]
+        nl <- nrow(left_child)
+        nr <- nrow(right_child)
+        
+        if(nrow(current_node) >= nmin){
+          majority_left <- c(majority_left, get_mode(left_child[,ncol(left_child)]))
+          majority_right <- c(majority_right, get_mode(right_child[,ncol(right_child)]))
+          nodelist <- c(nodelist, list(left_child), list(right_child))
+          location <- c(location, current_location)
+        } 
+      }
     } 
     current_location <- current_location + 1
   }
@@ -180,40 +178,34 @@ tree_pred <- function(x, tr) {
   predictions
 }
 
-#----------------------------------------------------------------------------------------------
+# Bagging (Bootstrap Aggregating)
+# m: number of bootstrao samples to be drawn
+# Returns: list of m trees
+tree_grow_b <- function(x, y, nmin, minleaf, nfeat, m) {
+  tree_list <- list()
+  for (i in 1:m) {
+    random_rows <- sample(nrow(x), nrow(x), replace = T)
+    x <- x[random_rows,]
+    row.names(x) <- 1:nrow(x)
+    tree <- tree_grow(x, y, nmin, minleaf, nfeat)
+    if (length(tree)!=0) {
+      tree_list <- c(tree_list, list(tree))
+    } else if (i > 1) {
+      i <= i - 1
+    }
+  }
+  tree_list
+}
 
-# # Test functions: 
-# 
-# ## tree_grow
-# 
-# ### Example input credit
-# nmin <- 2
-# minleaf <- 1
-# nfeat <- ncol(credit.dat)-1
-# x <- credit.dat[,1:ncol(credit.dat)-1]
-# y <- credit.dat[,ncol(credit.dat)]
-# 
-# tree_grow(x, y, nmin, minleaf, nfeat)
-# 
-# ### Example input pima
-# nmin <- 20
-# minleaf <- 5
-# nfeat <- ncol(pima.dat)-1
-# x <- pima.dat[,1:ncol(pima.dat)-1]
-# y <- pima.dat[,ncol(pima.dat)]
-# 
-# tree_grow(x, y, nmin, minleaf, nfeat)
+# Predict from bagging
+tree_pred_b <- function(x, trs) {
+  if (!is.null(dim(trs))) {
+    predictions <- sapply(trs, function(tr) tree_pred(x, tr))
+    predictions <- apply(predictions, 1, get_mode)
+  } else {
+    predictions <- tree_pred(x, trs[[1]])
+  }
+  predictions
+}
 
-## tree_predict
-# 
-# ### Example input credit
-# nmin <- 2
-# minleaf <- 1
-# nfeat <- ncol(credit.dat)-1
-# x <- credit.dat[,1:ncol(credit.dat)-1]
-# y <- credit.dat[,ncol(credit.dat)]
-# tr <- tree_grow(x, y, nmin, minleaf, nfeat)
-# 
-# y_hat <- tree_pred(x, tr)
 
-#-----------------------------------------------------------------------------------------------
