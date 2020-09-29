@@ -98,8 +98,9 @@ tree_grow <- function(feats, labels, nmin, minleaf, nfeat) {
   # Some arrays for storing the necessary info for the tree
   split <- c()
   feat_name <- c()
-  majority <- c() # Is going to be filled with info on which 
-  #class is the most prominents among the right and among the left side of the split
+  majority_left <- c() # Is going to be filled with info on which 
+  #class is the most prominents among the left side (lesser than) of the split
+  majority_right <- c()
   
   while (length(nodelist)!=0){
     
@@ -108,7 +109,10 @@ tree_grow <- function(feats, labels, nmin, minleaf, nfeat) {
     feats <- current_node[,1:ncol(current_node)-1] # set feats according to current node
     labels <- current_node[,ncol(current_node)] # set labels according to current node
     
-    if (impurity(labels)>0){ # if the impurity is 0, further splitting will not improve the tree
+    # if the impurity is 0, further splitting will not improve the tree
+    # nmin is the number of observations that a node must contain at least, for it to be allowed to be split.
+    if (impurity(labels)>0 & nrow(current_node) >= nmin){ 
+      
       S <- sapply(feats[, , drop = F], function(feat) bestsplit(feat, labels, minleaf = 1))
       s_star <- S[1,which.max(S[2,])]
       split <- c(split, s_star)
@@ -117,14 +121,16 @@ tree_grow <- function(feats, labels, nmin, minleaf, nfeat) {
       right_child <- current_node[current_node[,names(s_star)] > s_star[[1]],]
       nl <- nrow(left_child)
       nr <- nrow(right_child)
-      if(min(nl,nr) >= nmin){
-        majority <- list(left_majority = get_mode(left_child[,ncol(left_child)]),
-                         right_majority = get_mode(right_child[,ncol(right_child)]))
+
+      if(nrow(current_node) >= nmin){
+        majority_left <- c(majority_left, get_mode(left_child[,ncol(left_child)]))
+        majority_right <- c(majority_right, get_mode(right_child[,ncol(right_child)]))
         nodelist <- c(nodelist, list(left_child), list(right_child))
-      }
-    }
+      } 
+      
+    } 
   }
-  tree <- data.frame(split, feat_name, majority)
+  tree <- data.frame(split, feat_name, majority_left, majority_right)
   tree
 }
 
@@ -134,12 +140,21 @@ tree_grow <- function(feats, labels, nmin, minleaf, nfeat) {
 
 ## tree_grow
 
-### Example input
+### Example input credit
 nmin <- 2
 minleaf <- 1
 nfeat <- ncol(credit.dat)-1
 feats <- credit.dat[,1:ncol(credit.dat)-1]
 labels <- credit.dat[,ncol(credit.dat)]
+
+tree_grow(feats, labels, nmin, minleaf, nfeat)
+
+### Example input pima
+nmin <- 20
+minleaf <- 5
+nfeat <- ncol(pima.dat)-1
+feats <- pima.dat[,1:ncol(pima.dat)-1]
+labels <- pima.dat[,ncol(pima.dat)]
 
 tree_grow(feats, labels, nmin, minleaf, nfeat)
 
