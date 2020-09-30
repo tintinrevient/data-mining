@@ -238,52 +238,13 @@ tree_grow <- function(table, index_of_y, nmin, minleaf, nfeat) {
 # credit.tr
 
 # test for the tree_grow function based on "pima.txt"
-# pima.dat <- read.csv("./data/pima.txt")
-# index_of_y <- 9
-# nmin <- 20
-# minleaf <- 5
-# nfeat <- c(1:8)
-# pima.tr <- tree_grow(pima.dat, index_of_y, nmin, minleaf, nfeat)
-# pima.tr
-
-# get all the descendants of a tree from a specific node index, including itself.
-get_all_descendants <- function(node_index, tr) {
-  # include itself first
-  descendants <- c(node_index)
-  
-  # add node to nodelist if it is a non-terminal node
-  nodelist <- list()
-  if(is.na(tr[[node_index]][3])) {
-    nodelist[[1]] <- node_index
-  }
-  
-  # traverse the tree
-  while(length(nodelist) > 0) {
-    current_node_index <- nodelist[[1]]
-    nodelist[[1]] <- NULL
-    
-    # add the left children and right children to descendants
-    descendants <- c(descendants, tr[[current_node_index]][4])
-    descendants <- c(descendants, tr[[current_node_index]][5])
-    
-    # add left children to nodelist if it is a non-terminal node
-    if(is.na(tr[[tr[[current_node_index]][4]]][3])) {
-      nodelist[[length(nodelist) + 1]] <- tr[[current_node_index]][4]
-    }
-    
-    # add right children to nodelist if it is a non-terminal node
-    if(is.na(tr[[tr[[current_node_index]][5]]][3])) {
-      nodelist[[length(nodelist) + 1]] <- tr[[current_node_index]][5]
-    }
-  }
-  # return the descendants in descending order of node index
-  sort(descendants, decreasing = TRUE)
-}
-
-# test the descendants based on "credit.txt"
-# the right answer = [7, 6, 5, 4, 2]
-# descendants <- get_all_descendants(2, credit.tr)
-# descendants
+pima.dat <- read.csv("./data/pima.txt")
+index_of_y <- 9
+nmin <- 20
+minleaf <- 5
+nfeat <- c(1:8)
+pima.tr <- tree_grow(pima.dat, index_of_y, nmin, minleaf, nfeat)
+pima.tr
 
 # predict the class label based on the model of the tree returned by tree_grow()
 # x: predictors
@@ -365,11 +326,7 @@ tree_grow_b <- function(table, index_of_y, nmin, minleaf, nfeat, m, sample_size,
     indices <- sample(length(table[,1]), sample_size, replace = TRUE)
     
     # random forest: randomly select a subset of nfeat
-    # the size of the subset is random between 1 and length(nfeat) - 1
-    # num_of_predictors <- floor(runif(1, min=1, max=length(nfeat)))
-    # sample_of_nfeat <- sample(nfeat, num_of_predictors)
-    
-    # the size of the subset is fixed
+    # 1 <= nfeat_subset_size < nfeat
     sample_of_nfeat <- sample(nfeat, nfeat_subset_size)
     
     # grow a tree on this sample
@@ -459,10 +416,10 @@ confusion_matrix_b <- function(table, nfeat, index_of_y, trees) {
 }
 
 # confusion matrix based on "pima.txt"
-# nfeat <- c(1:8)
-# index_of_y <- 9
-# pima.tr.perf <- confusion_matrix(pima.dat, nfeat, index_of_y, pima.tr)
-# pima.tr.perf
+nfeat <- c(1:8)
+index_of_y <- 9
+pima.tr.perf <- confusion_matrix(pima.dat, nfeat, index_of_y, pima.tr)
+pima.tr.perf
 
 # confusion matrix based on "pima.txt" by the bagging with random forest
 nfeat <- c(1:8)
