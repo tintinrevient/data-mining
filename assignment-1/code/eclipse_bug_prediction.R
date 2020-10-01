@@ -11,13 +11,6 @@ impurity_by_gini_index <- function(y) {
   zero.percent * one.percent
 }
 
-# test for the impurity function based on Gini index
-# the right answer is: impurity = 0.2269293
-# pima.data.frame <- read_csv("./data/pima.txt")
-# y <- pima.data.frame %>% pull(9)
-# impurity <- impurity_by_gini_index(y)
-# impurity
-
 # the best split for a node based on one numeric attribute x and the label y
 # x = one column of a numeric predictor - multiple rows = vector
 # y = one column of the label - multiple rows = vector
@@ -66,22 +59,6 @@ bestsplit <- function(x, y) {
   c(impurity.reduction.max, x.splitpoints.best)
 }
 
-# test for the best split based on "credit.txt"
-# the right answer is: result = 0.1071429 36.0000000
-# credit.data.frame <- read_csv("./data/credit.txt")
-# x <- credit.data.frame %>% pull(4)
-# y <- credit.data.frame %>% pull(6)
-# result <- bestsplit(x, y)
-# result
-
-# test for the best split based on "pima.txt"
-# the right answer is: result = 0.04094462 127.50000000
-# pima.data.frame <- read_csv("./data/pima.txt")
-# x <- pima.data.frame %>% pull(2)
-# y <- pima.data.frame %>% pull(9)
-# result <- bestsplit(x, y)
-# result
-
 # calcuate the classified label by the vote of the majority of predictions
 # y = one column of the label - multiple rows = vector
 vote_of_majority <- function(y) {
@@ -91,12 +68,6 @@ vote_of_majority <- function(y) {
   else
     1
 }
-
-# test for the vote of majority
-# the right answer is 0
-# pima.data.frame <- read_csv("./data/pima.txt")
-# y <- pima.data.frame %>% pull(9)
-# vote_of_majority(y)
 
 # grow the classification tree
 # x = all the columns of the numeric predictors - multiple rows = matrix
@@ -154,7 +125,7 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
         if(result[1] == 0 && is.na(result[2])) {
           next
         }
-                
+        
         if(result[1] > feat.impurity.reduction.max) {
           feat.impurity.reduction.max <- result[1]
           feat.splitpoints.best <- result[2]
@@ -169,7 +140,7 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
         tree[[tree.node.index]] <- c(NA, NA, vote_of_majority(current.node.y), NA, NA) 
         next
       }
-
+      
       # child nodes <- apply(s*, current node)
       # children.left are the rows in the table, whose value of the best-split feature is less than and equal to the best-split point.
       children.left <- list(current.node.x[current.node.x[,feat.best] <= feat.splitpoints.best,], current.node.y[current.node.x[,feat.best] <= feat.splitpoints.best])
@@ -214,26 +185,6 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
   # return the model of the trained tree
   tree
 }
-
-# test for the tree_grow function based on "credit.txt"
-# credit.data.frame <- as.matrix(read_csv("./data/credit.txt"))
-# x <- credit.data.frame[,1:5]
-# y <- credit.data.frame[,6]
-# nmin <- 2
-# minleaf <- 1
-# nfeat <- c(1:5)
-# credit.tr <- tree_grow(x, y, nmin, minleaf, nfeat)
-# credit.tr
-
-# test for the tree_grow function based on "pima.txt"
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-x <- pima.data.frame[,1:8]
-y <- pima.data.frame[,9]
-nmin <- 20
-minleaf <- 5
-nfeat <- c(1:8)
-pima.tr <- tree_grow(x, y, nmin, minleaf, nfeat)
-pima.tr
 
 # predict the class label based on the model of the tree returned by tree_grow()
 # x = all the columns of the numeric predictors - one row = vector
@@ -286,42 +237,6 @@ tree_pred <- function(x, tr) {
   }
 }
 
-# test for the tree_pred function based on "credit.txt"
-# the right answer is: preds = 0 0 0 0 0 1 1 1 1 1
-# credit.data.frame <- as.matrix(read_csv("./data/credit.txt"))
-# x <- credit.data.frame[,1:5]
-# credit.preds <- tree_pred(x, credit.tr)
-# credit.preds
-
-# test for the tree_pred function based on "pima.txt"
-# the right answer is: correct_count = 646, wrong_count = 121
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-x <- pima.data.frame[,1:8]
-y <- pima.data.frame[,9]
-pima.preds.tr <- tree_pred(x, pima.tr)
-# correct_count <- length(y[y==pima.preds.tr])
-# wrong_count <- length(y[y!=pima.preds.tr])
-# correct_count
-# wrong_count
-
-# comparison with the decision tree generated from rpart
-# the data is based on "pima.txt"
-# tree_grow
-# pima.dat <- read.csv("./data/pima.txt")
-# library(rpart)
-# set.seed(1234)
-# pima.dtree <- rpart(X1 ~ ., data = pima.dat, method = "class", parms = list(split = "information"))
-# summary(pima.dtree)
-
-# plot the model of the decision tree
-# library(rpart.plot)
-# prp(pima.dtree, type = 2, extra = 104, fallen.leaves = TRUE, main = "Decision Tree")
-
-# tree_pred
-# pima.dtree.pred <- predict(pima.dtree, pima.dat, type = "class")
-# pima.dtree.perf <- table(pima.dat$X1, pima.dtree.pred, dnn = c("Actual", "Predicted"))
-# pima.dtree.perf
-
 # grow the classification tree by the bagging with random forest
 # m = the number of bootstrap samples to be drawn
 # sample_size = the size of one bootstrap sample (training set) < the size of table
@@ -351,18 +266,6 @@ tree_grow_b <- function(x, y, nmin, minleaf, nfeat, m, sample.size, nfeat.subset
   # return the list of m different trees
   trees
 }
-
-# test for the tree_grow_b function based on "pima.txt"
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-x <- pima.data.frame[,1:8]
-y <- pima.data.frame[,9]
-nmin <- 20
-minleaf <- 5
-nfeat <- c(1:8)
-m <- 100
-sample.size <- 700
-nfeat.subset.size <- 6
-pima.trees <- tree_grow_b(x, y, nmin, minleaf, nfeat, m, sample.size, nfeat.subset.size)
 
 # predict the class label based on the voting of all the trees returned by tree_grow_b()
 # x = all the columns of the numeric predictors - one row = vector
@@ -409,49 +312,86 @@ tree_pred_b <- function(x, trees) {
   }
 }
 
-# test for the tree_pred_b function based on "pima.txt"
-# the right answer is: correct_count = 680, wrong_count = 87
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-x <- pima.data.frame[,1:8]
-y <- pima.data.frame[,9]
-pima.preds.trees <- tree_pred_b(x, pima.trees)
-# correct_count <- length(y[y==pima.preds.trees])
-# wrong_count <- length(y[y!=pima.preds.trees])
-# correct_count
-# wrong_count
-
-# comparison with the random forest generated from randomForest
-# the data is based on "pima.txt"
-# tree_grow_b
-# pima.dat <- read.csv("./data/pima.txt")
-# library(randomForest)
-# set.seed(1234)
-# pima.forest <- randomForest(X1 ~ ., data = pima.dat, na.action = na.roughfix, importance = TRUE)
-# pima.forest
-
-# determine variable importance
-# importance(pima.forest, type = 2)
-
-# tree_pred_b
-# pima.forest.pred <- predict(pima.forest, pima.dat, type = "class")
-# pima.forest.perf <- table(pima.dat$X1, pima.forest.pred, dnn = c("Actual", "Predicted"))
-# pima.forest.perf
-
-# display the confusion matrix based on the table and the tree model
+# display the statistics
 # y.actual = vector
 # y.predicted = vector
-confusion_matrix <- function(y.actual, y.predicted) {
-  table(y.actual, y.predicted, dnn = c("Actual", "Predicted"))
+statistics <- function(y.actual, y.predicted) {
+  # confusion matrix
+  confusion.matrix <- table(y.actual, y.predicted, dnn = c("Actual", "Predicted"))
+  
+  # true positive = predicted and observed as defects (label = 1) 
+  true.positive <- confusion.matrix[2,2]
+  # false positive = predicted as defects, but observed as non-defects
+  false.positive <- confusion.matrix[1,2]
+  # true negative = predicted and observed as non-defects (label = 0) 
+  true.negative <- confusion.matrix[1,1]
+  # false negative = predicted as non-defects, but observed as defects
+  false.negative <- confusion.matrix[2,1]
+  
+  # precision = true defects / predicted defects
+  precision = true.positive / (true.positive + false.positive)
+  # recall = true defects / actual defects
+  recall = true.positive / (true.positive + false.negative)
+  # accuracy = correct classifications / total
+  accuracy = (true.positive + true.negative) / (true.positive + true.negative + false.positive + false.negative)
+  
+  # return the result
+  result <- tibble(precision = precision, recall = recall, accuracy = accuracy)
+  result
 }
 
-# confusion matrix based on "pima.txt"
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-y.actual <- pima.data.frame[,9]
-y.predicted.tr <- pima.preds.tr
-y.predicted.trees <- pima.preds.trees
+# read semicolon-separated files by the read_csv2() function
+# the training set "release 2.0"
+train.data.frame <- read_csv2("./data/eclipse-metrics-packages-2.0.csv") %>%
+  select(starts_with("FOUT", ignore.case = FALSE), starts_with("MLOC", ignore.case = FALSE), starts_with("NBD", ignore.case = FALSE), starts_with("PAR", ignore.case = FALSE), starts_with("VG", ignore.case = FALSE), starts_with("NOF", ignore.case = FALSE), starts_with("NOM", ignore.case = FALSE), starts_with("NSF", ignore.case = FALSE), starts_with("NSM", ignore.case = FALSE), starts_with("ACD", ignore.case = FALSE), starts_with("NOI", ignore.case = FALSE), starts_with("NOT", ignore.case = FALSE), starts_with("TLOC", ignore.case = FALSE), starts_with("NOCU", ignore.case = FALSE), pre, post)
+train.data.frame <- data.matrix(train.data.frame)
 
-# confusion matrix by a tree
-confusion_matrix(y.actual, y.predicted.tr)
-# confusion matrix by the bagging with random forest
-confusion_matrix(y.actual, y.predicted.trees)
+x.train <- train.data.frame[,1:41]
+y.train <- train.data.frame[,42]
+y.train[y.train!=0] = 1
 
+# the test set "release 3.0"
+test.data.frame <- read_csv2("./data/eclipse-metrics-packages-3.0.csv") %>%
+  select(starts_with("FOUT", ignore.case = FALSE), starts_with("MLOC", ignore.case = FALSE), starts_with("NBD", ignore.case = FALSE), starts_with("PAR", ignore.case = FALSE), starts_with("VG", ignore.case = FALSE), starts_with("NOF", ignore.case = FALSE), starts_with("NOM", ignore.case = FALSE), starts_with("NSF", ignore.case = FALSE), starts_with("NSM", ignore.case = FALSE), starts_with("ACD", ignore.case = FALSE), starts_with("NOI", ignore.case = FALSE), starts_with("NOT", ignore.case = FALSE), starts_with("TLOC", ignore.case = FALSE), starts_with("NOCU", ignore.case = FALSE), pre, post)
+test.data.frame <- data.matrix(test.data.frame)
+
+x.test <- test.data.frame[,1:41]
+y.test <- test.data.frame[,42]
+y.test[y.test!=0] = 1
+
+# train the single classification tree on the training set
+nmin <- 15
+minleaf <- 5
+nfeat <- c(1:41)
+tr <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
+
+# predict based on the single classification tree on the test set
+tr.preds <- tree_pred(x.test, tr)
+
+# precision, recall and accuracy of the single classification tree
+result <- statistics(y.test, tr.preds)
+result
+
+# train the classification tree by bagging on the training set
+m <- 100
+sample.size <- 100
+nfeat.subset.size <- 41
+tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m, sample.size, nfeat.subset.size)
+
+# predict based on the classification tree by bagging on the test set
+tr.bagging.preds <- tree_pred_b(x.test, tr.bagging)
+
+# precision, recall and accuracy of the classification tree by bagging
+result <- statistics(y.test, tr.bagging.preds)
+result
+
+# train the classification tree by random forest on the training set
+nfeat.subset.size <- 6
+tr.random.forest <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m, sample.size, nfeat.subset.size)
+
+# predict based on the classification tree by random forest on the test set
+tr.random.forest.preds <- tree_pred_b(x.test, tr.random.forest)
+
+# precision, recall and accuracy of the classification tree by random forest
+result <- statistics(y.test, tr.random.forest.preds)
+result
