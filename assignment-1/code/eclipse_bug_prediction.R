@@ -318,6 +318,7 @@ tree_pred_b <- function(x, trees) {
 statistics <- function(y.actual, y.predicted) {
   # confusion matrix
   confusion.matrix <- table(y.actual, y.predicted, dnn = c("Actual", "Predicted"))
+  print(confusion.matrix)
   
   # true positive = predicted and observed as defects (label = 1) 
   true.positive <- confusion.matrix[2,2]
