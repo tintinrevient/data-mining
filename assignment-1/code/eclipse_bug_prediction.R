@@ -375,7 +375,7 @@ result
 
 # train the classification tree by bagging on the training set
 m <- 100
-sample.size <- 50
+sample.size <- 100
 nfeat.subset.size <- 41
 tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m, sample.size, nfeat.subset.size)
 
