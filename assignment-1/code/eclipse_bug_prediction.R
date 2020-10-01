@@ -256,7 +256,7 @@ tree_grow_b <- function(x, y, nmin, minleaf, nfeat, m, sample.size, nfeat.subset
     nfeat.subset <- sample(nfeat, nfeat.subset.size)
     
     # grow a tree on this sample
-    tr <- tree_grow(x, y, nmin, minleaf, nfeat.subset)
+    tr <- tree_grow(x[indices,], y[indices], nmin, minleaf, nfeat.subset)
     
     # append this tree to the list of trees
     tree.index <- tree.index + 1
@@ -375,7 +375,7 @@ result
 
 # train the classification tree by bagging on the training set
 m <- 100
-sample.size <- 100
+sample.size <- 50
 nfeat.subset.size <- 41
 tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m, sample.size, nfeat.subset.size)
 

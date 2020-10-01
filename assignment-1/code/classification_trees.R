@@ -341,7 +341,7 @@ tree_grow_b <- function(x, y, nmin, minleaf, nfeat, m, sample.size, nfeat.subset
     nfeat.subset <- sample(nfeat, nfeat.subset.size)
     
     # grow a tree on this sample
-    tr <- tree_grow(x, y, nmin, minleaf, nfeat.subset)
+    tr <- tree_grow(x[indices,], y[indices], nmin, minleaf, nfeat.subset)
     
     # append this tree to the list of trees
     tree.index <- tree.index + 1
