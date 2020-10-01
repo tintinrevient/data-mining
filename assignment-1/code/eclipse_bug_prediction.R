@@ -110,8 +110,8 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
     # if impurity(current node) > 0 AND observations(current node) >= nmin, the current node is allowed to be split.
     if(impurity(current.node.y) > 0 && length(current.node.y) >= nmin) {
       
-      # Find one best feature to split the data
-      # Feature is represented by its index in the table
+      # find one best feature to split the data
+      # feature is represented by its index in the table
       feat.best <- NA
       feat.splitpoints.best <- NA
       feat.impurity.reduction.max <- 0
@@ -121,14 +121,28 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
       # S <- set of candidate splits in current node
       # s* <- argmax {impurity reduction(s, current node)}, where s is in S
       for(feat in nfeat.set) {
+        # result is a vector
+        # result[1] = the maximum impurity reduction
+        # result[2] = the best split point
         result <- bestsplit(current.node.x[,feat], current.node.y)
         
         # if there does not exist the best split for the current feature
-        # continue to the next feature
+        # skip this feature, and continue to the next feature
         if(result[1] == 0 && is.na(result[2])) {
           next
         }
         
+        # check minleaf constraint
+        # if either observations(left children) < minleaf or observations(right children) < minleaf
+        # skip this feature, and continue to the next feature
+        children.left.size <- length(current.node.y[current.node.x[,feat] <= result[2]])
+        children.right.size <- length(current.node.y[current.node.x[,feat] > result[2]])
+        if(children.left.size < minleaf || children.right.size < minleaf) {
+          next
+        }
+        
+        # update the best feature with its best split point
+        # out of all the possible splits that meet the minleaf constraint, pick the best one.
         if(result[1] > feat.impurity.reduction.max) {
           feat.impurity.reduction.max <- result[1]
           feat.splitpoints.best <- result[2]
@@ -136,30 +150,22 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
         }
       }
       
-      # if there does not exist the best feature to split the node
-      # stop splitting, and append the current node as the terminal node to the tree model. 
       if(is.na(feat.best) || is.na(feat.splitpoints.best)) {
+        # if there does not exist the best feature to split the node
+        # stop splitting, and append the current node as the terminal node to the tree model. 
         tree.node.index <- tree.node.index + 1
         tree[[tree.node.index]] <- c(NA, NA, vote_of_majority(current.node.y), NA, NA) 
         next
-      }
-      
-      # child nodes <- apply(s*, current node)
-      # children.left are the rows in the table, whose value of the best-split feature is less than and equal to the best-split point.
-      children.left <- list(current.node.x[current.node.x[,feat.best] <= feat.splitpoints.best,], current.node.y[current.node.x[,feat.best] <= feat.splitpoints.best])
-      # children.right are the rows in the table, whose value of the best-split feature is greater than the best-split point.
-      children.right <- list(current.node.x[current.node.x[,feat.best] > feat.splitpoints.best,], current.node.y[current.node.x[,feat.best] > feat.splitpoints.best])
-      
-      # check minleaf constraint
-      if(length(children.left[[2]]) < minleaf || length(children.right[[2]]) < minleaf) {
-        # if observations(child nodes) < minleaf
-        # stop splitting, and append the current node as the terminal node to the tree model.
-        tree.node.index <- tree.node.index + 1
-        tree[[tree.node.index]] <- c(NA, NA, vote_of_majority(current.node.y), NA, NA) 
-        next
+        
       } else {
-        # if observations(child nodes) >= minleaf
-        # split the current node into child nodes, and append the current node as the non-terminal node to the tree model.
+        # split the current node into child nodes
+        # child nodes <- apply(s*, current node)
+        # children.left are the rows in the table, whose value of the best-split feature is less than and equal to the best-split point.
+        children.left <- list(current.node.x[current.node.x[,feat.best] <= feat.splitpoints.best,], current.node.y[current.node.x[,feat.best] <= feat.splitpoints.best])
+        # children.right are the rows in the table, whose value of the best-split feature is greater than the best-split point.
+        children.right <- list(current.node.x[current.node.x[,feat.best] > feat.splitpoints.best,], current.node.y[current.node.x[,feat.best] > feat.splitpoints.best])
+        
+        # append the current node as the non-terminal node to the tree model.
         tree.node.index <- tree.node.index + 1
         tree[[tree.node.index]] <- c(feat.best, feat.splitpoints.best, NA, current.node.index + length(nodelist)/2 + 1, current.node.index + length(nodelist)/2 + 2)
         

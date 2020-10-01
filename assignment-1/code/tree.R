@@ -1,5 +1,3 @@
-library(tidyverse)
-
 # calculate the impurity based on Gini index for binary classifications
 # y = one column of the label - multiple rows = vector
 impurity <- function(y) {
@@ -10,13 +8,6 @@ impurity <- function(y) {
   # return the impurity
   zero.percent * one.percent
 }
-
-# test for the impurity function based on Gini index
-# the right answer is: impurity = 0.2269293
-# pima.data.frame <- read_csv("./data/pima.txt")
-# y <- pima.data.frame %>% pull(9)
-# impurity <- impurity(y)
-# impurity
 
 # the best split for a node based on one numeric attribute x and the label y
 # x = one column of a numeric predictor - multiple rows = vector
@@ -66,22 +57,6 @@ bestsplit <- function(x, y) {
   c(impurity.reduction.max, x.splitpoints.best)
 }
 
-# test for the best split based on "credit.txt"
-# the right answer is: result = 0.1071429 36.0000000
-# credit.data.frame <- read_csv("./data/credit.txt")
-# x <- credit.data.frame %>% pull(4)
-# y <- credit.data.frame %>% pull(6)
-# result <- bestsplit(x, y)
-# result
-
-# test for the best split based on "pima.txt"
-# the right answer is: result = 0.04094462 127.50000000
-# pima.data.frame <- read_csv("./data/pima.txt")
-# x <- pima.data.frame %>% pull(2)
-# y <- pima.data.frame %>% pull(9)
-# result <- bestsplit(x, y)
-# result
-
 # calcuate the classified label by the vote of the majority of predictions
 # y = one column of the label - multiple rows = vector
 vote_of_majority <- function(y) {
@@ -91,12 +66,6 @@ vote_of_majority <- function(y) {
   else
     1
 }
-
-# test for the vote of majority
-# the right answer is 0
-# pima.data.frame <- read_csv("./data/pima.txt")
-# y <- pima.data.frame %>% pull(9)
-# vote_of_majority(y)
 
 # grow the classification tree
 # x = all the columns of the numeric predictors - multiple rows = matrix
@@ -121,7 +90,7 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
   
   # nfeat.set is sampled out of all the predictors from [1, ncol(x)] to choose the number of nfeat predictors
   nfeat.set <- sort(sample(ncol(x), nfeat))
-  
+
   repeat{
     
     # until nodelist = ∅
@@ -224,26 +193,6 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
   tree
 }
 
-# test for the tree_grow function based on "credit.txt"
-# credit.data.frame <- as.matrix(read_csv("./data/credit.txt"))
-# x <- credit.data.frame[,1:5]
-# y <- credit.data.frame[,6]
-# nmin <- 2
-# minleaf <- 1
-# nfeat <- 5
-# credit.tr <- tree_grow(x, y, nmin, minleaf, nfeat)
-# credit.tr
-
-# test for the tree_grow function based on "pima.txt"
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-x <- pima.data.frame[,1:8]
-y <- pima.data.frame[,9]
-nmin <- 20
-minleaf <- 5
-nfeat <- 8
-pima.tr <- tree_grow(x, y, nmin, minleaf, nfeat)
-pima.tr
-
 # predict the class label based on the model of the tree returned by tree_grow()
 # x = all the columns of the numeric predictors - one row = vector
 # tr = the model of the tree
@@ -295,41 +244,21 @@ tree_pred <- function(x, tr) {
   }
 }
 
-# test for the tree_pred function based on "credit.txt"
-# the right answer is: preds = 0 0 0 0 0 1 1 1 1 1
-# credit.data.frame <- as.matrix(read_csv("./data/credit.txt"))
-# x <- credit.data.frame[,1:5]
-# credit.preds <- tree_pred(x, credit.tr)
-# credit.preds
+# test for the tree_grow function based on "credit.txt"
+# cr = read.csv('./data/credit.txt')
+# x = cr[,-6]
+# y = cr[,6]
+# tr = tree_grow(x=x, y=y, nmin=2, minleaf=1, nfeat=5)
+# y_pred = tree_pred(x, tr)
+# round(mean(y == y_pred), 2)
 
-# test for the tree_pred function based on "pima.txt"
-# the right answer is: correct_count = 646, wrong_count = 121
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-x <- pima.data.frame[,1:8]
-y <- pima.data.frame[,9]
-pima.preds.tr <- tree_pred(x, pima.tr)
-# correct_count <- length(y[y==pima.preds.tr])
-# wrong_count <- length(y[y!=pima.preds.tr])
-# correct_count
-# wrong_count
-
-# comparison with the decision tree generated from rpart
-# the data is based on "pima.txt"
-# tree_grow
-# pima.dat <- read.csv("./data/pima.txt")
-# library(rpart)
-# set.seed(1234)
-# pima.dtree <- rpart(X1 ~ ., data = pima.dat, method = "class", parms = list(split = "information"))
-# summary(pima.dtree)
-
-# plot the model of the decision tree
-# library(rpart.plot)
-# prp(pima.dtree, type = 2, extra = 104, fallen.leaves = TRUE, main = "Decision Tree")
-
-# tree_pred
-# pima.dtree.pred <- predict(pima.dtree, pima.dat, type = "class")
-# pima.dtree.perf <- table(pima.dat$X1, pima.dtree.pred, dnn = c("Actual", "Predicted"))
-# pima.dtree.perf
+# test for the tree_grow function based on "pima.txt"
+# pima = read.csv('./data/pima.txt', header=FALSE)
+# x = pima[,-9]
+# y = pima[,9]
+# tr = tree_grow(x=x, y=y, nmin=20, minleaf=5, nfeat=8)
+# y_pred = tree_pred(x, tr)
+# round(mean(y == y_pred), 2)
 
 # grow the classification tree by the bagging with random forest
 # m = the number of bootstrap samples to be drawn
@@ -354,16 +283,6 @@ tree_grow_b <- function(x, y, nmin, minleaf, nfeat, m) {
   # return the list of m different trees
   trees
 }
-
-# test for the tree_grow_b function based on "pima.txt"
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-x <- pima.data.frame[,1:8]
-y <- pima.data.frame[,9]
-nmin <- 20
-minleaf <- 5
-nfeat <- 4
-m <- 100
-pima.trs <- tree_grow_b(x, y, nmin, minleaf, nfeat, m)
 
 # predict the class label based on the voting of all the trees returned by tree_grow_b()
 # x = all the columns of the numeric predictors - one row = vector
@@ -410,48 +329,18 @@ tree_pred_b <- function(x, trs) {
   }
 }
 
-# test for the tree_pred_b function based on "pima.txt"
-# the right answer is: correct_count = 680, wrong_count = 87
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-x <- pima.data.frame[,1:8]
-y <- pima.data.frame[,9]
-pima.preds.trs <- tree_pred_b(x, pima.trs)
-# correct_count <- length(y[y==pima.preds.trs])
-# wrong_count <- length(y[y!=pima.preds.trs])
-# correct_count
-# wrong_count
+# test for the tree_grow_b function based on "credit.txt"
+# cr = read.csv('./data/credit.txt')
+# x = cr[,-6]
+# y = cr[,6]
+# trs = tree_grow_b(x=x, y=y, nmin=2, minleaf=1, nfeat=4, m=50)
+# y_pred = tree_pred_b(x, trs)
+# round(mean(y == y_pred), 2)
 
-# comparison with the random forest generated from randomForest
-# the data is based on "pima.txt"
-# tree_grow_b
-# pima.dat <- read.csv("./data/pima.txt")
-# library(randomForest)
-# set.seed(1234)
-# pima.forest <- randomForest(X1 ~ ., data = pima.dat, na.action = na.roughfix, importance = TRUE)
-# pima.forest
-
-# determine variable importance
-# importance(pima.forest, type = 2)
-
-# tree_pred_b
-# pima.forest.pred <- predict(pima.forest, pima.dat, type = "class")
-# pima.forest.perf <- table(pima.dat$X1, pima.forest.pred, dnn = c("Actual", "Predicted"))
-# pima.forest.perf
-
-# display the confusion matrix based on the table and the tree model
-# y.actual = vector
-# y.predicted = vector
-confusion_matrix <- function(y.actual, y.predicted) {
-  table(y.actual, y.predicted, dnn = c("Actual", "Predicted"))
-}
-
-# confusion matrix based on "pima.txt"
-pima.data.frame <- as.matrix(read_csv("./data/pima.txt"))
-y.actual <- pima.data.frame[,9]
-y.predicted.tr <- pima.preds.tr
-y.predicted.trs <- pima.preds.trs
-
-# confusion matrix by a tree
-confusion_matrix(y.actual, y.predicted.tr)
-# confusion matrix by the bagging with random forest
-confusion_matrix(y.actual, y.predicted.trs)
+# test for the tree_grow_b function based on "pima.txt"
+# pima = read.csv('./data/pima.txt', header=FALSE)
+# x = pima[,-9]
+# y = pima[,9]
+# trs = tree_grow_b(x, y, nmin=20, minleaf=5, nfeat=4, m=10)
+# y_pred = tree_pred_b(x, trs)
+# round(mean(y == y_pred), 2)
