@@ -1,80 +1,23 @@
 library(tidyverse)
 
-# calculate the impurity based on Gini index for binary classifications
-# y = one column of the label - multiple rows = vector
-impurity <- function(y) {
-  
-  zero.percent <- length(y[y == 0]) / length(y)
-  one.percent <- 1 - zero.percent
-  
-  # return the impurity
-  zero.percent * one.percent
-}
-
-# the best split for a node based on one numeric attribute x and the label y
-# x = one column of a numeric predictor - multiple rows = vector
-# y = one column of the label - multiple rows = vector
-bestsplit <- function(x, y) {
-  
-  x.sorted <- sort(unique(x))
-  x.sorted.length <- length(x.sorted)
-  
-  impurity.parent <- impurity(y)
-  # initialize the best split point and its reduction of impurity.
-  # the reduction of impurity is supposed to be the maximum reduction of impurity.
-  impurity.reduction.max <- 0
-  x.splitpoints.best <- NA
-  
-  # if there is only one unique value in x
-  # the maximum impurity reduction is 0
-  # the best split point is NA
-  if(x.sorted.length < 2) {
-    return(c(impurity.reduction.max, x.splitpoints.best))
-  }
-  
-  # e.g. x = c(1, 2, 3, 4, 5): x has 5 values, and thus x has (5 - 1) = 4 split points.
-  # x.splitpoints = (c(1, 2, 3, 4) + c(2, 3, 4, 5)) / 2
-  x.splitpoints <- (x.sorted[1:x.sorted.length-1] + x.sorted[2:x.sorted.length]) / 2
-  
-  for(x.splitpoint in x.splitpoints) {
-    # the left children of a parent: x is less than and equal to the value of the split point.
-    proportion.left.children <- length(y[x <= x.splitpoint]) / length(y)
-    impurity.left.children <- impurity(y[x <= x.splitpoint])
-    
-    # the right children of a parent: x is greater than the value of the split point.
-    proportion.right.children <- length(y[x > x.splitpoint]) / length(y)
-    impurity.right.children <- impurity(y[x > x.splitpoint])
-    
-    # calculate the reduction of impurity
-    impurity.reduction <- impurity.parent - (proportion.left.children*impurity.left.children + proportion.right.children*impurity.right.children)
-    
-    # update the best split and its reduction of impurity, which is supposed to be maximum.
-    if(impurity.reduction > impurity.reduction.max) {
-      impurity.reduction.max <- impurity.reduction
-      x.splitpoints.best <- x.splitpoint
-    }
-  }
-  
-  # return the vector: c(the maximum impurity reduction, the best split point)
-  c(impurity.reduction.max, x.splitpoints.best)
-}
-
-# calcuate the classified label by the vote of the majority of predictions
-# y = one column of the label - multiple rows = vector
-vote_of_majority <- function(y) {
-  
-  if(length(y[y == 0]) > length(y[y == 1]))
-    0
-  else
-    1
-}
-
-# grow the classification tree
-# x = all the columns of the numeric predictors - multiple rows = matrix
-# y = one column of the label - multiple rows = vector
-# nmin = the minimum number of observations that a node must contain
-# minleaf = the minimum number of observations required for a leaf node
-# nfeat = the number of predictors used to grow the tree
+# --------------------------- Basic functions ---------------------------
+# 
+# --------------------------- function tree_grow ---------------------------
+# function name: 
+#   tree_grow
+#
+# input arguments:
+#   x: matrix (all the columns of the numeric predictors)
+#   y: vector (one column of the actual labels)
+#   nmin: integer (the minimum number of observations that a node must contain)
+#   minleaf: integer (the minimum number of observations required for a leaf node)
+#   nfeat: integer (the number of predictors used to grow the tree)
+#
+# returned result:
+#   tree: list of vectors (the model of the classification tree)
+# 
+# function description:
+#   grow the classification tree
 tree_grow <- function(x, y, nmin, minleaf, nfeat) {
   
   # nodelist <- {{training data}}
@@ -195,32 +138,19 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
   tree
 }
 
-# predict the class label based on the model of the tree returned by tree_grow()
-# x = all the columns of the numeric predictors - one row = vector
-# tr = the model of the tree
-tree_pred_by_one_row <- function(x, tr) {
-  # the initial node index is 1 = root node
-  current.node.index <- 1
-  
-  while(is.na(tr[[current.node.index]][3])) {
-    
-    if(x[tr[[current.node.index]][1]] <= tr[[current.node.index]][2]) {
-      # traverse to the left subtree
-      current.node.index <- tr[[current.node.index]][4]
-      
-    } else {
-      # traverse to the right subtree
-      current.node.index <- tr[[current.node.index]][5]
-    }
-  } 
-  
-  # return the classified label
-  tr[[current.node.index]][3]
-}
-
-# predict the class label based on the model of the tree returned by tree_grow()
-# x = all the columns of the numeric predictors - multiple rows = matrix or vector
-# tr = the model of the tree
+# --------------------------- function tree_pred ---------------------------
+# function name: 
+#   tree_pred
+# 
+# input arguments:
+#   x: vector/matrix (all the columns of the numeric predictors spanned across one or more than one rows)
+#   tr: list of vectors (the model of the classification tree)
+# 
+# returned result:
+#   preds: integer of 1 or 0/vector of 1s and 0s (all the predictions)
+# 
+# function description:
+#   predict the class label based on the model of the tree returned by the function tree_grow
 tree_pred <- function(x, tr) {
   
   if(is.null(nrow(x))) {
@@ -246,16 +176,32 @@ tree_pred <- function(x, tr) {
   }
 }
 
-# grow the classification tree by the bagging with random forest
-# m = the number of bootstrap samples to be drawn
+# --------------------------- function tree_grow_b ---------------------------
+# function name: 
+#   tree_grow_b
+# 
+# input arguments:
+#   x: matrix (all the columns of the numeric predictors)
+#   y: vector (one column of the actual labels)
+#   nmin: integer (the minimum number of observations that a node must contain)
+#   minleaf: integer (the minimum number of observations required for a leaf node)
+#   nfeat: integer (the number of predictors used to grow the tree)
+#   m: the number of bootstrap samples to be drawn
+# 
+# returned result:
+#   trees: list of list of vectors (a list of m models of the classification trees)
+# 
+# function description:
+#   grow the classification tree by the bagging with random forest
+#   training set is drawn with replacement from x with split 0.9
 tree_grow_b <- function(x, y, nmin, minleaf, nfeat, m) {
   # a list of m different trees
   trees <- list()
   tree.index <- 0
   
-  # draw m samples with replacement from "table"
+  # draw m samples with replacement from x
   for(i in 1:m) {
-    # draw a sample (training set) with replacement from "table"
+    # draw a sample (training set) with replacement from x
     indices <- sample(length(y), round(length(y)*0.9), replace = TRUE)
     
     # grow a tree on this sample
@@ -270,26 +216,19 @@ tree_grow_b <- function(x, y, nmin, minleaf, nfeat, m) {
   trees
 }
 
-# predict the class label based on the voting of all the trees returned by tree_grow_b()
-# x = all the columns of the numeric predictors - one row = vector
-# trees = the list of the models of the trees
-tree_pred_b_by_one_row <- function(x, trs) {
-  # predictions of all the trees
-  preds <- c()
-  
-  # iterate through all the trees to calculate the predictions
-  for(tr in trs) {
-    pred <- tree_pred(x, tr)
-    preds <- c(preds, pred)
-  }
-  
-  # return the majority vote of all the trees
-  vote_of_majority(preds)
-}
-
-# predict the class label based on the voting of all the trees returned by tree_grow_b()
-# x = all the columns of the numeric predictors - multiple rows = matrix or vector
-# trees = the list of the models of the trees
+# --------------------------- function tree_pred_b ---------------------------
+# function name: 
+#   tree_pred_b
+# 
+# input arguments:
+#   x: vector/matrix (all the columns of the numeric predictors spanned across one or more than one rows)
+#   trs: list of list of vectors (a list of m models of the classification trees)
+# 
+# returned result:
+#   preds: integer of 1 or 0/vector of 1s and 0s (all the predictions)
+# 
+# function description:
+#   predict the class label based on the voting of all the trees returned by the function tree_grow_b
 tree_pred_b <- function(x, trs) {
   
   if(is.null(nrow(x))) {
@@ -315,13 +254,181 @@ tree_pred_b <- function(x, trs) {
   }
 }
 
-# display the statistics
-# y.actual = vector
-# y.predicted = vector
-statistics <- function(y.actual, y.predicted) {
+# --------------------------- function impurity ---------------------------
+# function name: 
+#   impurity
+# 
+# input arguments:
+#   y: vector (one column of the actual labels)
+# 
+# returned result:
+#   zero.percent * one.percent: double (value of the impurity calculated based on Gini index)
+# 
+# function description:
+#   calculate the impurity based on Gini index for binary classifications
+impurity <- function(y) {
+  
+  zero.percent <- length(y[y == 0]) / length(y)
+  one.percent <- 1 - zero.percent
+  
+  # return the impurity
+  zero.percent * one.percent
+}
+
+# --------------------------- function bestsplit ---------------------------
+# function name: 
+#   bestsplit
+# 
+# input arguments:
+#   x: vector (one column of a numeric predictor)
+#   y: vector ( one column of the actual labels)
+# 
+# returned result:
+#   vector comprised of the best split point of a numeric predictor and its maximum impurity reduction
+# 
+# function description:
+#   the best split for a node based on one numeric attribute x and the label y
+bestsplit <- function(x, y) {
+  
+  x.sorted <- sort(unique(x))
+  x.sorted.length <- length(x.sorted)
+  
+  impurity.parent <- impurity(y)
+  # initialize the best split point and its reduction of impurity.
+  # the reduction of impurity is supposed to be the maximum reduction of impurity.
+  impurity.reduction.max <- 0
+  x.splitpoints.best <- NA
+  
+  # if there is only one unique value in x
+  # the maximum impurity reduction is 0
+  # the best split point is NA
+  if(x.sorted.length < 2) {
+    return(c(impurity.reduction.max, x.splitpoints.best))
+  }
+  
+  # e.g. x = c(1, 2, 3, 4, 5): x has 5 values, and thus x has (5 - 1) = 4 split points.
+  # x.splitpoints = (c(1, 2, 3, 4) + c(2, 3, 4, 5)) / 2
+  x.splitpoints <- (x.sorted[1:x.sorted.length-1] + x.sorted[2:x.sorted.length]) / 2
+  
+  for(x.splitpoint in x.splitpoints) {
+    # the left children of a parent: x is less than and equal to the value of the split point.
+    proportion.left.children <- length(y[x <= x.splitpoint]) / length(y)
+    impurity.left.children <- impurity(y[x <= x.splitpoint])
+    
+    # the right children of a parent: x is greater than the value of the split point.
+    proportion.right.children <- length(y[x > x.splitpoint]) / length(y)
+    impurity.right.children <- impurity(y[x > x.splitpoint])
+    
+    # calculate the reduction of impurity
+    impurity.reduction <- impurity.parent - (proportion.left.children*impurity.left.children + proportion.right.children*impurity.right.children)
+    
+    # update the best split and its reduction of impurity, which is supposed to be maximum.
+    if(impurity.reduction > impurity.reduction.max) {
+      impurity.reduction.max <- impurity.reduction
+      x.splitpoints.best <- x.splitpoint
+    }
+  }
+  
+  # return the vector: c(the maximum impurity reduction, the best split point)
+  c(impurity.reduction.max, x.splitpoints.best)
+}
+
+# --------------------------- function vote_of_majority ---------------------------
+# function name: 
+#   vote_of_majority
+# 
+# input arguments:
+#   y: vector (one column of the labels)
+# 
+# returned result:
+#   integer 0 or 1 (the majority of y)
+# 
+# function description:
+#   calcuate the classified label by the vote of the majority of predictions
+vote_of_majority <- function(y) {
+  
+  if(length(y[y == 0]) > length(y[y == 1]))
+    0
+  else
+    1
+}
+
+# --------------------------- function tree_pred_by_one_row ---------------------------
+# function name: 
+#   tree_pred_by_one_row
+# 
+# input arguments:
+#   x: vector (all the columns of the numeric predictors for only one row)
+#   tr: list of vectors (the model of the classification tree)
+# 
+# returned result:
+#   integer 0 or 1 (one prediction)
+# 
+# function description:
+#   predict the class label based on the model of the tree returned by the function tree_grow
+tree_pred_by_one_row <- function(x, tr) {
+  # the initial node index is 1 = root node
+  current.node.index <- 1
+  
+  while(is.na(tr[[current.node.index]][3])) {
+    
+    if(x[tr[[current.node.index]][1]] <= tr[[current.node.index]][2]) {
+      # traverse to the left subtree
+      current.node.index <- tr[[current.node.index]][4]
+      
+    } else {
+      # traverse to the right subtree
+      current.node.index <- tr[[current.node.index]][5]
+    }
+  } 
+  
+  # return the classified label
+  tr[[current.node.index]][3]
+}
+
+# --------------------------- function tree_pred_b_by_one_row ---------------------------
+# function name: 
+#   tree_pred_b_by_one_row
+# 
+# input arguments:
+#   x: vector (all the columns of the numeric predictors for only one row)
+#   trs: list of list of vectors (a list of m models of the classification trees)
+# 
+# returned result:
+#   integer 0 or 1 (one prediction)
+# 
+# function description:
+#   predict the class label based on the voting of all the trees returned by the function tree_grow_b
+tree_pred_b_by_one_row <- function(x, trs) {
+  # predictions of all the trees
+  preds <- c()
+  
+  # iterate through all the trees to calculate the predictions
+  for(tr in trs) {
+    pred <- tree_pred(x, tr)
+    preds <- c(preds, pred)
+  }
+  
+  # return the majority vote of all the trees
+  vote_of_majority(preds)
+}
+
+# --------------------------- function quality_measure ---------------------------
+# function name: 
+#   quality_measure
+# 
+# input arguments:
+#   y.actual: vector (a vector of actual labals)
+#   y.predicted: vector (a vector of predicted labels)
+# 
+# returned result:
+#   NULL
+# 
+# function description:
+#   display the quality measure: confusion matrix and precision/recall/accuracy
+quality_measure <- function(y.actual, y.predicted) {
   # confusion matrix
   confusion.matrix <- table(y.actual, y.predicted, dnn = c("Actual", "Predicted"))
-  print(confusion.matrix)
   
   # true positive = predicted and observed as defects (label = 1) 
   true.positive <- confusion.matrix[2,2]
@@ -340,12 +447,17 @@ statistics <- function(y.actual, y.predicted) {
   accuracy = (true.positive + true.negative) / (true.positive + true.negative + false.positive + false.negative)
   
   # return the result
-  result <- tibble(precision = precision, recall = recall, accuracy = accuracy)
-  result
+  precision.recall.accuracy <- tibble(precision = precision, recall = recall, accuracy = accuracy)
+  
+  print(confusion.matrix)
+  print(precision.recall.accuracy)
 }
 
-# read semicolon-separated files by the read_csv2() function
-# the training set "release 2.0"
+# --------------------------- Data analysis ---------------------------
+# 
+# --------------------------- Load the training and test dataset ---------------------------
+# read semicolon-separated files by the function read_csv2
+# the training set is from "release 2.0"
 train.data.frame <- read_csv2("./data/eclipse-metrics-packages-2.0.csv") %>%
   select(starts_with("FOUT", ignore.case = FALSE), starts_with("MLOC", ignore.case = FALSE), starts_with("NBD", ignore.case = FALSE), starts_with("PAR", ignore.case = FALSE), starts_with("VG", ignore.case = FALSE), starts_with("NOF", ignore.case = FALSE), starts_with("NOM", ignore.case = FALSE), starts_with("NSF", ignore.case = FALSE), starts_with("NSM", ignore.case = FALSE), starts_with("ACD", ignore.case = FALSE), starts_with("NOI", ignore.case = FALSE), starts_with("NOT", ignore.case = FALSE), starts_with("TLOC", ignore.case = FALSE), starts_with("NOCU", ignore.case = FALSE), pre, post)
 train.data.frame <- data.matrix(train.data.frame)
@@ -354,7 +466,7 @@ x.train <- train.data.frame[,1:41]
 y.train <- train.data.frame[,42]
 y.train[y.train!=0] = 1
 
-# the test set "release 3.0"
+# the test set is from "release 3.0"
 test.data.frame <- read_csv2("./data/eclipse-metrics-packages-3.0.csv") %>%
   select(starts_with("FOUT", ignore.case = FALSE), starts_with("MLOC", ignore.case = FALSE), starts_with("NBD", ignore.case = FALSE), starts_with("PAR", ignore.case = FALSE), starts_with("VG", ignore.case = FALSE), starts_with("NOF", ignore.case = FALSE), starts_with("NOM", ignore.case = FALSE), starts_with("NSF", ignore.case = FALSE), starts_with("NSM", ignore.case = FALSE), starts_with("ACD", ignore.case = FALSE), starts_with("NOI", ignore.case = FALSE), starts_with("NOT", ignore.case = FALSE), starts_with("TLOC", ignore.case = FALSE), starts_with("NOCU", ignore.case = FALSE), pre, post)
 test.data.frame <- data.matrix(test.data.frame)
@@ -363,37 +475,37 @@ x.test <- test.data.frame[,1:41]
 y.test <- test.data.frame[,42]
 y.test[y.test!=0] = 1
 
+# --------------------------- The single classification tree ---------------------------
 # train the single classification tree on the training set
 nmin <- 15
 minleaf <- 5
 nfeat <- 41
-tr <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
+tr.simple <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
 
 # predict based on the single classification tree on the test set
-tr.preds <- tree_pred(x.test, tr)
+tr.simple.preds <- tree_pred(x.test, tr.simple)
+# confusion matrix, precision, recall and accuracy of the single classification tree
+print("quality measure of the single classification tree")
+quality_measure(y.test, tr.simple.preds)
 
-# precision, recall and accuracy of the single classification tree
-result <- statistics(y.test, tr.preds)
-result
-
+# --------------------------- The classification tree by bagging ---------------------------
 # train the classification tree by bagging on the training set
 m <- 100
 tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
 
 # predict based on the classification tree by bagging on the test set
 tr.bagging.preds <- tree_pred_b(x.test, tr.bagging)
+# confusion matrix, precision, recall and accuracy of the classification tree by bagging
+print("quality measure of the classification tree by bagging")
+quality_measure(y.test, tr.bagging.preds)
 
-# precision, recall and accuracy of the classification tree by bagging
-result <- statistics(y.test, tr.bagging.preds)
-result
-
+# --------------------------- The classification tree by random forest ---------------------------
 # train the classification tree by random forest on the training set
 nfeat <- 6
 tr.random.forest <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
 
 # predict based on the classification tree by random forest on the test set
 tr.random.forest.preds <- tree_pred_b(x.test, tr.random.forest)
-
-# precision, recall and accuracy of the classification tree by random forest
-result <- statistics(y.test, tr.random.forest.preds)
-result
+# confusion matrix, precision, recall and accuracy of the classification tree by random forest
+print("quality measure of the classification tree by random forest")
+quality_measure(y.test, tr.random.forest.preds)
