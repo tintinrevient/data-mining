@@ -450,7 +450,7 @@ quality_measure <- function(y.actual, y.predicted) {
   precision.recall.accuracy <- tibble(precision = precision, recall = recall, accuracy = accuracy)
   
   print(confusion.matrix)
-  print(precision.recall.accuracy)
+  return(precision.recall.accuracy)
 }
 
 # --------------------------- Data analysis ---------------------------
@@ -486,7 +486,7 @@ tr.simple <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
 tr.simple.preds <- tree_pred(x.test, tr.simple)
 # confusion matrix, precision, recall and accuracy of the single classification tree
 print("quality measure of the single classification tree")
-quality_measure(y.test, tr.simple.preds)
+perf_single <- quality_measure(y.test, tr.simple.preds) %>% mutate(model = "single tree")
 
 # --------------------------- The classification tree by bagging ---------------------------
 # train the classification tree by bagging on the training set
@@ -497,7 +497,7 @@ tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
 tr.bagging.preds <- tree_pred_b(x.test, tr.bagging)
 # confusion matrix, precision, recall and accuracy of the classification tree by bagging
 print("quality measure of the classification tree by bagging")
-quality_measure(y.test, tr.bagging.preds)
+perf_bagging <- quality_measure(y.test, tr.bagging.preds) %>% mutate(model = "bagging")
 
 # --------------------------- The classification tree by random forest ---------------------------
 # train the classification tree by random forest on the training set
@@ -508,4 +508,32 @@ tr.random.forest <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
 tr.random.forest.preds <- tree_pred_b(x.test, tr.random.forest)
 # confusion matrix, precision, recall and accuracy of the classification tree by random forest
 print("quality measure of the classification tree by random forest")
-quality_measure(y.test, tr.random.forest.preds)
+perf_random <- quality_measure(y.test, tr.random.forest.preds) %>% mutate(model = "random forrest")
+
+#-------------------------------Test significance-------------------------------------------
+
+performance <- bind_rows(perf_single, perf_bagging, perf_random)
+aov(accuracy ~ model, data = performance) # not enough data to compute significance: no information about the variance of the individual models
+
+# Instead use information per observation and compare means (mean of "correct" equals the proportion correct)
+predictions <- tibble(predictions = c(tr.simple.preds, 
+                                      tr.bagging.preds, 
+                                      tr.random.forest.preds), 
+                      models = c(rep("single tree", 
+                                     length(tr.simple.preds)), 
+                                 rep("bagging", 
+                                     length(tr.bagging.preds)), 
+                                 rep("random forrest", 
+                                     length(tr.random.forest.preds))), 
+                      ground_truth = c(rep(y.test, 3)), 
+                      correct = ifelse(ground_truth == predictions, 1, 0)) %>%
+  mutate(models = factor(models,levels=c("single tree", "bagging", "random forrest")))
+
+summary(aov(correct ~ models, data = predictions))
+
+# Glm to estimate effect size
+
+summary(glm(correct ~ models, family = "binomial", data = predictions))
+## Bagging performas significantly better than the single tree, random forrest does not.
+
+
