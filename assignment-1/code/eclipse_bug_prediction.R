@@ -1,7 +1,7 @@
 # --------------------------- Student names ---------------------------
 # Code by:
-#   Fleur ()
-#   Anouk ()
+#   Fleur (5583837)
+#   Anouk (6620590)
 #   Shu Zhao (6833519)
 # 
 # --------------------------- Dependent library ---------------------------
@@ -9,7 +9,7 @@ library(tidyverse)
 
 # --------------------------- Basic functions ---------------------------
 # 
-# --------------------------- function tree_grow ---------------------------
+# --------------------------- Function tree_grow ---------------------------
 # function name: 
 #   tree_grow
 #
@@ -145,7 +145,7 @@ tree_grow <- function(x, y, nmin, minleaf, nfeat) {
   tree
 }
 
-# --------------------------- function tree_pred ---------------------------
+# --------------------------- Function tree_pred ---------------------------
 # function name: 
 #   tree_pred
 # 
@@ -183,7 +183,7 @@ tree_pred <- function(x, tr) {
   }
 }
 
-# --------------------------- function tree_grow_b ---------------------------
+# --------------------------- Function tree_grow_b ---------------------------
 # function name: 
 #   tree_grow_b
 # 
@@ -223,7 +223,7 @@ tree_grow_b <- function(x, y, nmin, minleaf, nfeat, m) {
   trees
 }
 
-# --------------------------- function tree_pred_b ---------------------------
+# --------------------------- Function tree_pred_b ---------------------------
 # function name: 
 #   tree_pred_b
 # 
@@ -261,7 +261,7 @@ tree_pred_b <- function(x, trs) {
   }
 }
 
-# --------------------------- function impurity ---------------------------
+# --------------------------- Function impurity ---------------------------
 # function name: 
 #   impurity
 # 
@@ -282,7 +282,7 @@ impurity <- function(y) {
   zero.percent * one.percent
 }
 
-# --------------------------- function bestsplit ---------------------------
+# --------------------------- Function bestsplit ---------------------------
 # function name: 
 #   bestsplit
 # 
@@ -340,7 +340,7 @@ bestsplit <- function(x, y) {
   c(impurity.reduction.max, x.splitpoints.best)
 }
 
-# --------------------------- function vote_of_majority ---------------------------
+# --------------------------- Function vote_of_majority ---------------------------
 # function name: 
 #   vote_of_majority
 # 
@@ -360,7 +360,7 @@ vote_of_majority <- function(y) {
     1
 }
 
-# --------------------------- function tree_pred_by_one_row ---------------------------
+# --------------------------- Function tree_pred_by_one_row ---------------------------
 # function name: 
 #   tree_pred_by_one_row
 # 
@@ -393,7 +393,7 @@ tree_pred_by_one_row <- function(x, tr) {
   tr[[current.node.index]][3]
 }
 
-# --------------------------- function tree_pred_b_by_one_row ---------------------------
+# --------------------------- Function tree_pred_b_by_one_row ---------------------------
 # function name: 
 #   tree_pred_b_by_one_row
 # 
@@ -420,7 +420,7 @@ tree_pred_b_by_one_row <- function(x, trs) {
   vote_of_majority(preds)
 }
 
-# --------------------------- function quality_measure ---------------------------
+# --------------------------- Function quality_measure ---------------------------
 # function name: 
 #   quality_measure
 # 
