@@ -40,8 +40,8 @@ Assumptions:
 * The **normal distribution** of data
 
 <p float="left">
-  <img src="./pix/anova-shape-1.png" width="300">
-  <img src="./pix/anova-shape-2.png" width="300">
+  <img src="./pix/anova-shape-1.png" width="400">
+  <img src="./pix/anova-shape-2.png" width="400">
 </p>
 
 
