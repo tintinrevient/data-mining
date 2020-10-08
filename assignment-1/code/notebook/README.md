@@ -2,6 +2,9 @@
 
 ## p-value
 
+Concepts:
+* The smaller the **p-value**, the more statistically significant the result
+
 <p float="left">
   <img src="./pix/data_ab_test.png" width="250">
   <img src="./pix/ab_test_p_value.png" width="350">
@@ -26,8 +29,21 @@ Resampling:
 ## ANOVA
 
 Concepts:
-* A hypothesis test between two groups among multiple groups
-* **F-statistic**: differences among **group means** which exceed what might be expected in a chance model
+* ANOVA is A/B/C/D... test meansured by **F-statistic**, whereas **T-test** is A/B test measured by **T-statistic**
+* **F-statistic**: between-groups variance / within-groups variance
+	* Grand mean = mean of group means
+	* Between-groups variance = variance of group means
+	* Within-groups variance = sum of group variances / num of groups
+	* The **bigger** the **F-statistic**, the more statistically significant the result
+
+Assumptions:
+* The **normal distribution** of data
+
+<p float="left">
+  <img src="./pix/anova-shape-1.png" width="300">
+  <img src="./pix/anova-shape-2.png" width="300">
+</p>
+
 
 <p float="left">
   <img src="./pix/data_anova.png" width="300">
@@ -43,6 +59,12 @@ Resampling:
 6. How often does the resampled variance >= the observed variance, and this is **p-value**
 
 ## Chi-Square Test
+
+Concepts:
+* Chi-square test is measured by **Chi-square statistic**
+
+Assumptions:
+*  The data in the cells are **frequencies**
 
 <p float="left">
   <img src="./pix/data-chi-square.png" width="250">
@@ -67,3 +89,36 @@ Resampling:
 4. Repeat steps 2-3 many times
 5. How often does the resampled sum of squared deviations >= the observed deviation, and that is **p-value**
 
+## Power test
+
+Concepts:
+* **Power**: the probability of detecting a given effect size given a sample size
+* **Significance level**: The statistical significance level at which the test is conducted
+* **Effect size**: The minimun size of the effect that you hope to detect in a statistical test, e.g., "a 20% improvement in click rates"
+	* The bigger the actual difference between A and B, the greater the probability that our test will reveal it
+	* The smaller the actual difference between A and B, the more data will be needed to detect it
+* There are four moving parts to calculate power or required sample size, specify any three of them, and the fourth can be calculated:
+	* Sample size
+	* Effect size you want to detect
+	* Significance level (alpha) at which the test is conducted
+	* Power
+
+Formulas:
+* pwr.anova.test(k = , n = , f = , sig.level = , power = )
+	* k = the number of groups
+	* n = the common sample size in each group
+	* f = effect size
+
+* pwr.chisq.test(w =, N = , df = , sig.level =, power = )
+	* w = effect size
+	* N = the total sample size
+	* df = the degrees of freedom
+
+<p float="left">
+  <img src="./pix/anova-power-test-cohen.png" width="300">
+  <img src="./pix/chi-square-power-test-cohen.png.png" width="300">
+</p>
+
+## Reference:
+* https://www.youtube.com/watch?v=RAwlr6FGhjo
+* https://www.statmethods.net/stats/power.html
