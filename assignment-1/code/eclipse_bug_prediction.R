@@ -453,11 +453,11 @@ quality_measure <- function(y.actual, y.predicted) {
   # accuracy = correct classifications / total
   accuracy = (true.positive + true.negative) / (true.positive + true.negative + false.positive + false.negative)
   
-  # return the result
-  precision.recall.accuracy <- tibble(precision = precision, recall = recall, accuracy = accuracy)
+  # store precision, recall and accuracy in accuracy.table
+  accuracy.table <- tibble(precision = precision, recall = recall, accuracy = accuracy)
   
-  print(confusion.matrix)
-  print(precision.recall.accuracy)
+  # return the result as a list comprised of accuracy.table and confusion.matrix
+  list(accuracy.table, confusion.matrix)
 }
 
 # --------------------------- Data analysis ---------------------------
@@ -491,9 +491,12 @@ tr.simple <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
 
 # predict based on the single classification tree on the test set
 tr.simple.preds <- tree_pred(x.test, tr.simple)
-# confusion matrix, precision, recall and accuracy of the single classification tree
-print("quality measure of the single classification tree")
-perf_single <- quality_measure(y.test, tr.simple.preds) %>% mutate(model = "single tree")
+
+# performance result of confusion matrix, precision, recall and accuracy for the single classification tree
+result.simple <- quality_measure(y.test, tr.simple.preds)
+
+# pre-process the performance result for later data analysis
+perf.simple <- result.simple[[1]] %>% mutate(model = "single tree")
 
 # --------------------------- The classification tree by bagging ---------------------------
 # train the classification tree by bagging on the training set
@@ -502,9 +505,12 @@ tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
 
 # predict based on the classification tree by bagging on the test set
 tr.bagging.preds <- tree_pred_b(x.test, tr.bagging)
-# confusion matrix, precision, recall and accuracy of the classification tree by bagging
-print("quality measure of the classification tree by bagging")
-perf_bagging <- quality_measure(y.test, tr.bagging.preds) %>% mutate(model = "bagging")
+
+# performance result of confusion matrix, precision, recall and accuracy for the classification tree by bagging
+result.bagging <- quality_measure(y.test, tr.bagging.preds)
+
+# pre-process the performance result for later data analysis
+perf.bagging <- result.bagging[[1]] %>% mutate(model = "bagging")
 
 # --------------------------- The classification tree by random forest ---------------------------
 # train the classification tree by random forest on the training set
@@ -513,13 +519,29 @@ tr.random.forest <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
 
 # predict based on the classification tree by random forest on the test set
 tr.random.forest.preds <- tree_pred_b(x.test, tr.random.forest)
-# confusion matrix, precision, recall and accuracy of the classification tree by random forest
+
+# performance result of confusion matrix, precision, recall and accuracy for the classification tree by random forest
+result.random.forest <- quality_measure(y.test, tr.random.forest.preds)
+
+# pre-process the performance result for later data analysis
+perf.random.forest <- result.random.forest[[1]] %>% mutate(model = "random forest")
+
+# --------------------------- Print the performance results of all three tree models ---------------------------
+
+print("quality measure of the single classification tree")
+print(result.simple)
+
+print("quality measure of the classification tree by bagging")
+print(result.bagging)
+
 print("quality measure of the classification tree by random forest")
-perf_random <- quality_measure(y.test, tr.random.forest.preds) %>% mutate(model = "random forrest")
+print(result.random.forest)
 
 #------------------------------- Test significance -------------------------------------------
+#
+#------------------------------- ANOVA -------------------------------------------
 
-performance <- bind_rows(perf_single, perf_bagging, perf_random)
+performance <- bind_rows(perf.simple, perf.bagging, perf.random.forest)
 aov(accuracy ~ model, data = performance) # not enough data to compute significance: no information about the variance of the individual models
 
 # Instead use information per observation and compare means (mean of "correct" equals the proportion correct)
@@ -534,12 +556,38 @@ predictions <- tibble(predictions = c(tr.simple.preds,
                                      length(tr.random.forest.preds))), 
                       ground_truth = c(rep(y.test, 3)), 
                       correct = ifelse(ground_truth == predictions, 1, 0)) %>%
-  mutate(models = factor(models,levels=c("single tree", "bagging", "random forrest")))
+  mutate(models = factor(models,levels=c("single tree", "bagging", "random forest")))
 
 summary(aov(correct ~ models, data = predictions))
 
+#------------------------------- Generalized Linear Model -------------------------------------------
 # Glm to estimate effect size
 
 summary(glm(correct ~ models, family = "binomial", data = predictions))
 ## Bagging performas significantly better than the single tree, random forrest does not.
+
+#------------------------------- Chi-Squared Test -------------------------------------------
+# pairwise chi-squared test between the simple tree and the tree with bagging
+accuracy.simple.bagging <- c(result.simple[[2]][1] + result.simple[[2]][4], result.simple[[2]][2] + result.simple[[2]][3],
+                          result.bagging[[2]][1] + result.bagging[[2]][4], result.bagging[[2]][2] + result.bagging[[2]][3])
+accuracy.matrix.simple.bagging <- matrix(accuracy.simple.bagging, nrow = 2, ncol = 2, byrow = TRUE)
+dimnames(accuracy.matrix.simple.bagging) <- list(c("Simple", "Bagging"), c("Correct", "Wrong"))
+
+chisq.test(accuracy.matrix.simple.bagging, simulate.p.value = TRUE)
+
+# pairwise chi-squared test between the simple tree and the random forest
+accuracy.simple.random.forest <- c(result.simple[[2]][1] + result.simple[[2]][4], result.simple[[2]][2] + result.simple[[2]][3],
+                          result.random.forest[[2]][1] + result.random.forest[[2]][4], result.random.forest[[2]][2] + result.random.forest[[2]][3])
+accuracy.matrix.simple.random.forest <- matrix(accuracy.simple.random.forest, nrow = 2, ncol = 2, byrow = TRUE)
+dimnames(accuracy.matrix.simple.random.forest) <- list(c("Simple", "Random forest"), c("Correct", "Wrong"))
+
+chisq.test(accuracy.matrix.simple.random.forest, simulate.p.value = TRUE)
+
+# pairwise chi-squared test between the tree with bagging and the random forest
+accuracy.bagging.random.forest <- c(result.bagging[[2]][1] + result.bagging[[2]][4], result.bagging[[2]][2] + result.bagging[[2]][3],
+                          result.random.forest[[2]][1] + result.random.forest[[2]][4], result.random.forest[[2]][2] + result.random.forest[[2]][3])
+accuracy.matrix.bagging.random.forest <- matrix(accuracy.bagging.random.forest, nrow = 2, ncol = 2, byrow = TRUE)
+dimnames(accuracy.matrix.bagging.random.forest) <- list(c("Bagging", "Random forest"), c("Correct", "Wrong"))
+
+chisq.test(accuracy.matrix.bagging.random.forest, simulate.p.value = TRUE)
 
