@@ -566,8 +566,8 @@ summary(aov(correct ~ models, data = predictions))
 summary(glm(correct ~ models, family = "binomial", data = predictions))
 ## Bagging performas significantly better than the single tree, random forrest does not.
 
-#------------------------------- Chi-Squared Test -------------------------------------------
-# pairwise chi-squared test between the simple tree and the tree with bagging
+#------------------------------- Chi-Square Test -------------------------------------------
+# pairwise chi-square test between the simple tree and the tree with bagging
 accuracy.simple.bagging <- c(result.simple[[2]][1] + result.simple[[2]][4], result.simple[[2]][2] + result.simple[[2]][3],
                           result.bagging[[2]][1] + result.bagging[[2]][4], result.bagging[[2]][2] + result.bagging[[2]][3])
 accuracy.matrix.simple.bagging <- matrix(accuracy.simple.bagging, nrow = 2, ncol = 2, byrow = TRUE)
@@ -575,7 +575,7 @@ dimnames(accuracy.matrix.simple.bagging) <- list(c("Simple", "Bagging"), c("Corr
 
 chisq.test(accuracy.matrix.simple.bagging, simulate.p.value = TRUE)
 
-# pairwise chi-squared test between the simple tree and the random forest
+# pairwise chi-square test between the simple tree and the random forest
 accuracy.simple.random.forest <- c(result.simple[[2]][1] + result.simple[[2]][4], result.simple[[2]][2] + result.simple[[2]][3],
                           result.random.forest[[2]][1] + result.random.forest[[2]][4], result.random.forest[[2]][2] + result.random.forest[[2]][3])
 accuracy.matrix.simple.random.forest <- matrix(accuracy.simple.random.forest, nrow = 2, ncol = 2, byrow = TRUE)
@@ -583,7 +583,7 @@ dimnames(accuracy.matrix.simple.random.forest) <- list(c("Simple", "Random fores
 
 chisq.test(accuracy.matrix.simple.random.forest, simulate.p.value = TRUE)
 
-# pairwise chi-squared test between the tree with bagging and the random forest
+# pairwise chi-square test between the tree with bagging and the random forest
 accuracy.bagging.random.forest <- c(result.bagging[[2]][1] + result.bagging[[2]][4], result.bagging[[2]][2] + result.bagging[[2]][3],
                           result.random.forest[[2]][1] + result.random.forest[[2]][4], result.random.forest[[2]][2] + result.random.forest[[2]][3])
 accuracy.matrix.bagging.random.forest <- matrix(accuracy.bagging.random.forest, nrow = 2, ncol = 2, byrow = TRUE)
@@ -591,3 +591,42 @@ dimnames(accuracy.matrix.bagging.random.forest) <- list(c("Bagging", "Random for
 
 chisq.test(accuracy.matrix.bagging.random.forest, simulate.p.value = TRUE)
 
+#------------------------------- Power Test -------------------------------------------
+#
+#------------------------------- Power Test for Chi-Square Test -------------------------------------------
+# power test for chi-square test between the simple tree and the tree with bagging
+group.sample <- length(y.test)
+p0.1 <- (result.simple[[2]][1] + result.simple[[2]][4] + result.bagging[[2]][1] + result.bagging[[2]][4]) / (group.sample * 2)
+p0.2 <- (result.simple[[2]][2] + result.simple[[2]][3] + result.bagging[[2]][2] + result.bagging[[2]][3]) / (group.sample * 2)
+p1.1.1 <- (result.simple[[2]][1] + result.simple[[2]][4]) / group.sample
+p1.1.2 <- (result.bagging[[2]][1] + result.bagging[[2]][4]) / group.sample
+p1.2.1 <- (result.simple[[2]][2] + result.simple[[2]][3]) / group.sample
+p1.2.2 <- (result.bagging[[2]][2] + result.bagging[[2]][3]) / group.sample
+effect.size <- sqrt((p0.1 - p1.1.1)^2/p0.1 + (p0.1 - p1.1.2)^2/p0.1 +  (p0.2 - p1.2.1)^2/p0.2 + (p0.2 - p1.2.2)^2/p0.2)
+total.samples <- group.sample * 2
+degree.freedom <- (2-1) * (2-1)
+pwr.chisq.test(w = effect.size, df = degree.freedom, N = total.samples, sig.level=0.05)
+
+# power test for chi-square test between the simple tree and the random forest
+p0.1 <- (result.simple[[2]][1] + result.simple[[2]][4] + result.random.forest[[2]][1] + result.random.forest[[2]][4]) / (group.sample * 2)
+p0.2 <- (result.simple[[2]][2] + result.simple[[2]][3] + result.random.forest[[2]][2] + result.random.forest[[2]][3]) / (group.sample * 2)
+p1.1.1 <- (result.simple[[2]][1] + result.simple[[2]][4]) / group.sample
+p1.1.2 <- (result.random.forest[[2]][1] + result.random.forest[[2]][4]) / group.sample
+p1.2.1 <- (result.simple[[2]][2] + result.simple[[2]][3]) / group.sample
+p1.2.2 <- (result.random.forest[[2]][2] + result.random.forest[[2]][3]) / group.sample
+effect.size <- sqrt((p0.1 - p1.1.1)^2/p0.1 + (p0.1 - p1.1.2)^2/p0.1 +  (p0.2 - p1.2.1)^2/p0.2 + (p0.2 - p1.2.2)^2/p0.2)
+total.samples <- group.sample * 2
+degree.freedom <- (2-1) * (2-1)
+pwr.chisq.test(w = effect.size, df = degree.freedom, N = total.samples, sig.level=0.05)
+
+# power test for chi-square test between the tree with bagging and the random forest
+p0.1 <- (result.bagging[[2]][1] + result.bagging[[2]][4] + result.random.forest[[2]][1] + result.random.forest[[2]][4]) / (group.sample * 2)
+p0.2 <- (result.bagging[[2]][2] + result.bagging[[2]][3] + result.random.forest[[2]][2] + result.random.forest[[2]][3]) / (group.sample * 2)
+p1.1.1 <- (result.bagging[[2]][1] + result.bagging[[2]][4]) / group.sample
+p1.1.2 <- (result.random.forest[[2]][1] + result.random.forest[[2]][4]) / group.sample
+p1.2.1 <- (result.bagging[[2]][2] + result.bagging[[2]][3]) / group.sample
+p1.2.2 <- (result.random.forest[[2]][2] + result.random.forest[[2]][3]) / group.sample
+effect.size <- sqrt((p0.1 - p1.1.1)^2/p0.1 + (p0.1 - p1.1.2)^2/p0.1 +  (p0.2 - p1.2.1)^2/p0.2 + (p0.2 - p1.2.2)^2/p0.2)
+total.samples <- group.sample * 2
+degree.freedom <- (2-1) * (2-1)
+pwr.chisq.test(w = effect.size, df = degree.freedom, N = total.samples, sig.level=0.05)
