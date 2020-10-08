@@ -3,8 +3,8 @@
 ## p-value
 
 <p float="left">
-  <img src="./pix/data_ab_test.png" width="200">
-  <img src="./pix/ab_test_p_value.png" width="300">
+  <img src="./pix/data_ab_test.png" width="250">
+  <img src="./pix/ab_test_p_value.png" width="350">
 </p>
 
 Observations:
@@ -30,8 +30,8 @@ Concepts:
 * **F-statistic**: differences among **group means** which exceed what might be expected in a chance model
 
 <p float="left">
-  <img src="./pix/data_anova.png" width="200">
-  <img src="./pix/anova_f_statistic.png" width="300">
+  <img src="./pix/data_anova.png" width="300">
+  <img src="./pix/anova_f_statistic.png" width="400">
 </p>
 
 Resampling:
@@ -45,9 +45,9 @@ Resampling:
 ## Chi-Square Test
 
 <p float="left">
-  <img src="./pix/data-chi-square.png" width="200">
-  <img src="./pix/data-null-hypothesis.png" width="200">
-  <img src="./pix/data-pearson-residue.png" width="200">
+  <img src="./pix/data-chi-square.png" width="250">
+  <img src="./pix/data-null-hypothesis.png" width="250">
+  <img src="./pix/data-pearson-residue.png" width="250">
 </p>
 
 Observations:
