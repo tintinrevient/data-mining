@@ -118,8 +118,8 @@ Formulas:
 	* df = the degrees of freedom
 
 <p float="left">
-  <img src="./pix/anova-power-test-cohen.png" width="300">
-  <img src="./pix/chi-square-power-test-cohen.png.png" width="300">
+  <img src="./pix/anova-power-test-cohen.png" width="450">
+  <img src="./pix/chi-square-power-test-cohen.png" width="450">
 </p>
 
 ## Reference:
