@@ -29,7 +29,7 @@ Resampling:
 ## ANOVA
 
 Concepts:
-* ANOVA is A/B/C/D... test meansured by **F-statistic**, whereas **T-test** is A/B test measured by **T-statistic**
+* ANOVA is A/B/C/D... test measured by **F-statistic**, whereas **T-test** is A/B test measured by **T-statistic**
 * **F-statistic**: between-groups variance / within-groups variance
 	* Grand mean = mean of group means
 	* Between-groups variance = variance of group means
