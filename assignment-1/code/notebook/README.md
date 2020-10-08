@@ -96,8 +96,8 @@ Resampling:
 
 Concepts:
 * **Power**: the probability of detecting a given effect size given a sample size
-* **Significance level**: The statistical significance level at which the test is conducted
-* **Effect size**: The minimun size of the effect that you hope to detect in a statistical test, e.g., "a 20% improvement in click rates"
+* **Significance level**: the statistical significance level at which the test is conducted
+* **Effect size**: the minimun size of the effect that you hope to detect in a statistical test, e.g., "a 20% improvement in click rates"
 	* The bigger the actual difference between A and B, the greater the probability that our test will reveal it
 	* The smaller the actual difference between A and B, the more data will be needed to detect it
 * There are four moving parts to calculate power or required sample size, specify any three of them, and the fourth can be calculated:
