@@ -52,7 +52,7 @@ Resampling:
 
 Observations:
 * The expected click rate: (14 + 8 + 12) / (14 + 986 + 8 + 992 + 12 + 988) = 34 / 3000 = 0.01133
-* The expected number of clickes: 0.01133 * 1000 = 11.33
+* The expected number of clicks: 0.01133 * 1000 = 11.33
 
 Formulas:
 <p float="left">
