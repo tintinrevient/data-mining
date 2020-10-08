@@ -77,7 +77,7 @@ Observations:
 * The expected number of clicks: 0.01133 * 1000 = 11.33
 
 Formulas:
-* Pearson residue
+* Pearson residual
 * Chi-square statistic
 
 <p float="left">
