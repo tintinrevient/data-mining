@@ -7,6 +7,20 @@
 # --------------------------- Dependent library ---------------------------
 library(tidyverse)
 
+# --------------------------- Initialization configurations ---------------------------
+# train the new models everytime, and display the results
+USE_TRAINED_MODELS <- FALSE
+# if it is configured to train the new models everytime, then we can configure to save the new models everytime
+SAVE_TRAINED_MODELS <- FALSE
+# if it is configured to save the new trained models everytime, then the version of models = current timestamp
+VERSION_OF_TRAINED_MODELS <- str_replace_all(Sys.time(), c(" " = "_", ":" = "-"))
+
+# use the already-trained models, if the same predictions and results will be used in the data analysis in the report
+# USE_TRAINED_MODELS <- TRUE
+# PATH_OF_SINGLE_TREE <- paste("./models/", "tree_single_2020-10-09_14-16-19.RData", sep = "")
+# PATH_OF_BAGGING <- paste("./models/", "tree_bagging_2020-10-09_14-16-19.RData", sep = "")
+# PATH_OF_RANDOM_FOREST <- paste("./models/", "tree_random_2020-10-09_14-16-19.RData", sep = "")
+
 # --------------------------- Basic functions ---------------------------
 # 
 # --------------------------- Function tree_grow ---------------------------
@@ -461,7 +475,6 @@ quality_measure <- function(y.actual, y.predicted) {
 }
 
 # --------------------------- Data analysis ---------------------------
-
 # 
 # --------------------------- Load the training and test dataset ---------------------------
 # read semicolon-separated files by the function read_csv2
@@ -484,36 +497,45 @@ y.test <- test.data.frame[,42]
 y.test[y.test!=0] = 1
 
 # --------------------------- The single classification tree ---------------------------
-# train the single classification tree on the training set
-nmin <- 15
-minleaf <- 5
-nfeat <- 41
-#tr.simple <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
 
-# --------------BEFORE RE-DOING ANALYSIS, LOAD SAVED TREES--------------
-
-# To load trees use:
-load(file = "tree_simple.RData")
+if(USE_TRAINED_MODELS) {
+  # load the trained model
+  load(file = PATH_OF_SINGLE_TREE)
+  
+} else {
+  # train the single classification tree on the training set
+  nmin <- 15
+  minleaf <- 5
+  nfeat <- 41
+  tr.single <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
+  
+  # save the trained model
+  if(SAVE_TRAINED_MODELS) {
+    save(tr.single, file=paste("./models/tree_single_", VERSION_OF_TRAINED_MODELS,".RData", sep = ""))
+  }
+}
 
 # predict based on the single classification tree on the test set
-tr.simple.preds <- tree_pred(x.test, tr.simple)
+tr.single.preds <- tree_pred(x.test, tr.single)
 
 # performance result of confusion matrix, precision, recall and accuracy for the single classification tree
-result.simple <- quality_measure(y.test, tr.simple.preds)
-
-# pre-process the performance result for later data analysis
-perf.simple <- result.simple[[1]] %>% mutate(model = "single tree")
+result.single <- quality_measure(y.test, tr.single.preds)
 
 # --------------------------- The classification tree by bagging ---------------------------
-# train the classification tree by bagging on the training set
-m <- 100
-#tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
-
-# --------------BEFORE RE-DOING ANALYSIS, LOAD SAVED TREES--------------
-
-# To load trees use:
-load(file = "tree_bagging.RData")
-
+if(USE_TRAINED_MODELS) {
+  # load the trained model
+  load(file = PATH_OF_BAGGING)
+  
+} else {
+  # train the classification tree by bagging on the training set
+  m <- 100
+  tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
+  
+  # save the trained model
+  if(SAVE_TRAINED_MODELS) {
+    save(tr.bagging, file=paste("./models/tree_bagging_", VERSION_OF_TRAINED_MODELS,".RData", sep = ""))
+  }
+}
 
 # predict based on the classification tree by bagging on the test set
 tr.bagging.preds <- tree_pred_b(x.test, tr.bagging)
@@ -521,18 +543,21 @@ tr.bagging.preds <- tree_pred_b(x.test, tr.bagging)
 # performance result of confusion matrix, precision, recall and accuracy for the classification tree by bagging
 result.bagging <- quality_measure(y.test, tr.bagging.preds)
 
-# pre-process the performance result for later data analysis
-perf.bagging <- result.bagging[[1]] %>% mutate(model = "bagging")
-
 # --------------------------- The classification tree by random forest ---------------------------
-# train the classification tree by random forest on the training set
-nfeat <- 6
-#tr.random.forest <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
-
-# --------------BEFORE RE-DOING ANALYSIS, LOAD SAVED TREES--------------
-
-# To load trees use:
-load(file = "tree_random.RData")
+if(USE_TRAINED_MODELS) {
+  # load the trained model
+  load(file = PATH_OF_RANDOM_FOREST)
+  
+} else {
+  # train the classification tree by random forest on the training set
+  nfeat <- 6
+  tr.random.forest <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
+  
+  # save the trained model
+  if(SAVE_TRAINED_MODELS) {
+    save(tr.random.forest, file=paste("./models/tree_random_", VERSION_OF_TRAINED_MODELS,".RData", sep = ""))
+  }
+}
 
 # predict based on the classification tree by random forest on the test set
 tr.random.forest.preds <- tree_pred_b(x.test, tr.random.forest)
@@ -540,121 +565,13 @@ tr.random.forest.preds <- tree_pred_b(x.test, tr.random.forest)
 # performance result of confusion matrix, precision, recall and accuracy for the classification tree by random forest
 result.random.forest <- quality_measure(y.test, tr.random.forest.preds)
 
-# pre-process the performance result for later data analysis
-perf.random.forest <- result.random.forest[[1]] %>% mutate(model = "random forest")
-
 # --------------------------- Print the performance results of all three tree models ---------------------------
 
 print("quality measure of the single classification tree")
-print(result.simple)
+print(result.single)
 
 print("quality measure of the classification tree by bagging")
 print(result.bagging)
 
 print("quality measure of the classification tree by random forest")
 print(result.random.forest)
-
-#------------------------------- Test significance -------------------------------------------
-#
-#------------------------------- ANOVA -------------------------------------------
-
-performance <- bind_rows(perf.simple, perf.bagging, perf.random.forest)
-aov(accuracy ~ model, data = performance) # not enough data to compute significance: no information about the variance of the individual models
-
-# Instead use information per observation and compare means (mean of "correct" equals the proportion correct)
-predictions <- tibble(predictions = c(tr.simple.preds, 
-                                      tr.bagging.preds, 
-                                      tr.random.forest.preds), 
-                      models = c(rep("single tree", 
-                                     length(tr.simple.preds)), 
-                                 rep("bagging", 
-                                     length(tr.bagging.preds)), 
-                                 rep("random forest", 
-                                     length(tr.random.forest.preds))), 
-                      ground_truth = c(rep(y.test, 3)), 
-                      correct = ifelse(ground_truth == predictions, 1, 0)) %>%
-  mutate(models = factor(models,levels=c("single tree", "bagging", "random forest")))
-
-summary(aov(correct ~ models, data = predictions))
-
-#------------------------------- Generalized Linear Model -------------------------------------------
-# Glm to estimate effect size
-
-summary(glm(correct ~ models, family = "binomial", data = predictions))
-## Bagging performas significantly better than the single tree, random forrest does not.
-
-#------------------------------- Chi-Square Test -------------------------------------------
-# pairwise chi-square test between the simple tree and the tree with bagging
-accuracy.simple.bagging <- c(result.simple[[2]][1] + result.simple[[2]][4], result.simple[[2]][2] + result.simple[[2]][3],
-                          result.bagging[[2]][1] + result.bagging[[2]][4], result.bagging[[2]][2] + result.bagging[[2]][3])
-accuracy.matrix.simple.bagging <- matrix(accuracy.simple.bagging, nrow = 2, ncol = 2, byrow = TRUE)
-dimnames(accuracy.matrix.simple.bagging) <- list(c("Simple", "Bagging"), c("Correct", "Wrong"))
-
-chisq.test(accuracy.matrix.simple.bagging, simulate.p.value = TRUE)
-
-# pairwise chi-square test between the simple tree and the random forest
-accuracy.simple.random.forest <- c(result.simple[[2]][1] + result.simple[[2]][4], result.simple[[2]][2] + result.simple[[2]][3],
-                          result.random.forest[[2]][1] + result.random.forest[[2]][4], result.random.forest[[2]][2] + result.random.forest[[2]][3])
-accuracy.matrix.simple.random.forest <- matrix(accuracy.simple.random.forest, nrow = 2, ncol = 2, byrow = TRUE)
-dimnames(accuracy.matrix.simple.random.forest) <- list(c("Simple", "Random forest"), c("Correct", "Wrong"))
-
-chisq.test(accuracy.matrix.simple.random.forest, simulate.p.value = TRUE)
-
-# pairwise chi-square test between the tree with bagging and the random forest
-accuracy.bagging.random.forest <- c(result.bagging[[2]][1] + result.bagging[[2]][4], result.bagging[[2]][2] + result.bagging[[2]][3],
-                          result.random.forest[[2]][1] + result.random.forest[[2]][4], result.random.forest[[2]][2] + result.random.forest[[2]][3])
-accuracy.matrix.bagging.random.forest <- matrix(accuracy.bagging.random.forest, nrow = 2, ncol = 2, byrow = TRUE)
-dimnames(accuracy.matrix.bagging.random.forest) <- list(c("Bagging", "Random forest"), c("Correct", "Wrong"))
-
-chisq.test(accuracy.matrix.bagging.random.forest, simulate.p.value = TRUE)
-
-#------------------------------- Power Test -------------------------------------------
-#
-#------------------------------- Power Test for Chi-Square Test -------------------------------------------
-# Agresti(2007) p.39 - Taken from ?chisq.text documentation
-
-# power test for chi-square test between the simple tree and the tree with bagging
-group.sample <- length(y.test)
-p0.1 <- (result.simple[[2]][1] + result.simple[[2]][4] + result.bagging[[2]][1] + result.bagging[[2]][4]) / (group.sample * 2)
-p0.2 <- (result.simple[[2]][2] + result.simple[[2]][3] + result.bagging[[2]][2] + result.bagging[[2]][3]) / (group.sample * 2)
-p1.1.1 <- (result.simple[[2]][1] + result.simple[[2]][4]) / group.sample
-p1.1.2 <- (result.bagging[[2]][1] + result.bagging[[2]][4]) / group.sample
-p1.2.1 <- (result.simple[[2]][2] + result.simple[[2]][3]) / group.sample
-p1.2.2 <- (result.bagging[[2]][2] + result.bagging[[2]][3]) / group.sample
-effect.size <- sqrt((p0.1 - p1.1.1)^2/p0.1 + (p0.1 - p1.1.2)^2/p0.1 +  (p0.2 - p1.2.1)^2/p0.2 + (p0.2 - p1.2.2)^2/p0.2)
-total.samples <- group.sample * 2
-degree.freedom <- (2-1) * (2-1)
-pwr.chisq.test(w = effect.size, df = degree.freedom, N = total.samples, sig.level=0.05)
-
-# power test for chi-square test between the simple tree and the random forest
-p0.1 <- (result.simple[[2]][1] + result.simple[[2]][4] + result.random.forest[[2]][1] + result.random.forest[[2]][4]) / (group.sample * 2)
-p0.2 <- (result.simple[[2]][2] + result.simple[[2]][3] + result.random.forest[[2]][2] + result.random.forest[[2]][3]) / (group.sample * 2)
-p1.1.1 <- (result.simple[[2]][1] + result.simple[[2]][4]) / group.sample
-p1.1.2 <- (result.random.forest[[2]][1] + result.random.forest[[2]][4]) / group.sample
-p1.2.1 <- (result.simple[[2]][2] + result.simple[[2]][3]) / group.sample
-p1.2.2 <- (result.random.forest[[2]][2] + result.random.forest[[2]][3]) / group.sample
-effect.size <- sqrt((p0.1 - p1.1.1)^2/p0.1 + (p0.1 - p1.1.2)^2/p0.1 +  (p0.2 - p1.2.1)^2/p0.2 + (p0.2 - p1.2.2)^2/p0.2)
-total.samples <- group.sample * 2
-degree.freedom <- (2-1) * (2-1)
-pwr.chisq.test(w = effect.size, df = degree.freedom, N = total.samples, sig.level=0.05)
-
-# power test for chi-square test between the tree with bagging and the random forest
-p0.1 <- (result.bagging[[2]][1] + result.bagging[[2]][4] + result.random.forest[[2]][1] + result.random.forest[[2]][4]) / (group.sample * 2)
-p0.2 <- (result.bagging[[2]][2] + result.bagging[[2]][3] + result.random.forest[[2]][2] + result.random.forest[[2]][3]) / (group.sample * 2)
-p1.1.1 <- (result.bagging[[2]][1] + result.bagging[[2]][4]) / group.sample
-p1.1.2 <- (result.random.forest[[2]][1] + result.random.forest[[2]][4]) / group.sample
-p1.2.1 <- (result.bagging[[2]][2] + result.bagging[[2]][3]) / group.sample
-p1.2.2 <- (result.random.forest[[2]][2] + result.random.forest[[2]][3]) / group.sample
-effect.size <- sqrt((p0.1 - p1.1.1)^2/p0.1 + (p0.1 - p1.1.2)^2/p0.1 +  (p0.2 - p1.2.1)^2/p0.2 + (p0.2 - p1.2.2)^2/p0.2)
-total.samples <- group.sample * 2
-degree.freedom <- (2-1) * (2-1)
-pwr.chisq.test(w = effect.size, df = degree.freedom, N = total.samples, sig.level=0.05)
-
-
-#--------------------------Saved all trees so that we always use the same trees if we want to run tests again ----------------------
-
-#save(tr.simple, file="tree_simple.RData")
-#save(tr.bagging, file="tree_bagging.RData")
-#save(tr.random.forest, file="tree_random.RData")
-
-
