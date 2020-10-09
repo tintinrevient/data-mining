@@ -4,6 +4,10 @@ library(pwr)
 
 # --------------------------- Initialization configurations ---------------------------
 #
+# path to the test dataset release 3.0
+PATH_OF_TEST_DATASET <- "./data/eclipse-metrics-packages-3.0.csv"
+
+# paths to the trained tree models
 PATH_OF_SINGLE_TREE <- paste("./models/", "tree_single_2020-10-09_14-16-19.RData", sep = "")
 PATH_OF_BAGGING <- paste("./models/", "tree_bagging_2020-10-09_14-16-19.RData", sep = "")
 PATH_OF_RANDOM_FOREST <- paste("./models/", "tree_random_2020-10-09_14-16-19.RData", sep = "")
@@ -16,7 +20,7 @@ source("tree.R")
 # --------------------------- Load only the test dataset ---------------------------
 # read semicolon-separated files
 # the test set is from "release 3.0"
-test.data.frame <- read_csv2("./data/eclipse-metrics-packages-3.0.csv") %>%
+test.data.frame <- read_csv2(PATH_OF_TEST_DATASET) %>%
   select(starts_with("FOUT", ignore.case = FALSE), starts_with("MLOC", ignore.case = FALSE), starts_with("NBD", ignore.case = FALSE), starts_with("PAR", ignore.case = FALSE), starts_with("VG", ignore.case = FALSE), starts_with("NOF", ignore.case = FALSE), starts_with("NOM", ignore.case = FALSE), starts_with("NSF", ignore.case = FALSE), starts_with("NSM", ignore.case = FALSE), starts_with("ACD", ignore.case = FALSE), starts_with("NOI", ignore.case = FALSE), starts_with("NOT", ignore.case = FALSE), starts_with("TLOC", ignore.case = FALSE), starts_with("NOCU", ignore.case = FALSE), pre, post)
 test.data.frame <- data.matrix(test.data.frame)
 
