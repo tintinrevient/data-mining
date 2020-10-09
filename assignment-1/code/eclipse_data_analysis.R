@@ -4,9 +4,9 @@ library(pwr)
 
 # --------------------------- Initialization configurations ---------------------------
 #
-PATH_OF_SINGLE_TREE <- paste("./models/", "tree_single.RData", sep = "")
-PATH_OF_BAGGING <- paste("./models/", "tree_bagging.RData", sep = "")
-PATH_OF_RANDOM_FOREST <- paste("./models/", "tree_random.RData", sep = "")
+PATH_OF_SINGLE_TREE <- paste("./models/", "tree_single_2020-10-09_14-16-19.RData", sep = "")
+PATH_OF_BAGGING <- paste("./models/", "tree_bagging_2020-10-09_14-16-19.RData", sep = "")
+PATH_OF_RANDOM_FOREST <- paste("./models/", "tree_random_2020-10-09_14-16-19.RData", sep = "")
 
 # --------------------------- Load the dependent functions ---------------------------
 #

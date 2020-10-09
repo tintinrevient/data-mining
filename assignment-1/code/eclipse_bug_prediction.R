@@ -4,22 +4,24 @@
 #   Anouk (6620590)
 #   Shu Zhao (6833519)
 # 
-# --------------------------- Dependent library ---------------------------
-library(tidyverse)
-
 # --------------------------- Initialization configurations ---------------------------
+# path to the training dataset release 2.0
+PATH_OF_TRAINING_DATASET <- "./data/eclipse-metrics-packages-2.0.csv"
+# path to the test dataset release 3.0
+PATH_OF_TEST_DATASET <- "./data/eclipse-metrics-packages-3.0.csv"
+
 # train the new models everytime, and display the results
 USE_TRAINED_MODELS <- FALSE
 # if it is configured to train the new models everytime, then we can configure to save the new models everytime
 SAVE_TRAINED_MODELS <- FALSE
 # if it is configured to save the new trained models everytime, then the version of models = current timestamp
-VERSION_OF_TRAINED_MODELS <- str_replace_all(Sys.time(), c(" " = "_", ":" = "-"))
+VERSION_OF_TRAINED_MODELS <- gsub(":", "-", gsub(" ", "_", Sys.time()))
 
 # use the already-trained models, if the same predictions and results will be used in the data analysis in the report
 # USE_TRAINED_MODELS <- TRUE
-# PATH_OF_SINGLE_TREE <- paste("./models/", "tree_single_2020-10-09_14-16-19.RData", sep = "")
-# PATH_OF_BAGGING <- paste("./models/", "tree_bagging_2020-10-09_14-16-19.RData", sep = "")
-# PATH_OF_RANDOM_FOREST <- paste("./models/", "tree_random_2020-10-09_14-16-19.RData", sep = "")
+# PATH_OF_SINGLE_TREE <- paste("./models/", "tree_single_2020-10-09_15-46-28.RData", sep = "")
+# PATH_OF_BAGGING <- paste("./models/", "tree_bagging_2020-10-09_15-46-28.RData", sep = "")
+# PATH_OF_RANDOM_FOREST <- paste("./models/", "tree_random_2020-10-09_15-46-28.RData", sep = "")
 
 # --------------------------- Basic functions ---------------------------
 # 
@@ -468,7 +470,8 @@ quality_measure <- function(y.actual, y.predicted) {
   accuracy = (true.positive + true.negative) / (true.positive + true.negative + false.positive + false.negative)
   
   # store precision, recall and accuracy in accuracy.table
-  accuracy.table <- tibble(precision = precision, recall = recall, accuracy = accuracy)
+  accuracy.table <- matrix(c(precision, recall, accuracy), nrow = 1, ncol = 3, byrow = TRUE)
+  dimnames(accuracy.table) <- list(c(""), c("precision", "recall", "accuracy"))
   
   # return the result as a list comprised of accuracy.table and confusion.matrix
   list(accuracy.table, confusion.matrix)
@@ -477,10 +480,11 @@ quality_measure <- function(y.actual, y.predicted) {
 # --------------------------- Data analysis ---------------------------
 # 
 # --------------------------- Load the training and test dataset ---------------------------
-# read semicolon-separated files by the function read_csv2
+# read semicolon-separated files
 # the training set is from "release 2.0"
-train.data.frame <- read_csv2("./data/eclipse-metrics-packages-2.0.csv") %>%
-  select(starts_with("FOUT", ignore.case = FALSE), starts_with("MLOC", ignore.case = FALSE), starts_with("NBD", ignore.case = FALSE), starts_with("PAR", ignore.case = FALSE), starts_with("VG", ignore.case = FALSE), starts_with("NOF", ignore.case = FALSE), starts_with("NOM", ignore.case = FALSE), starts_with("NSF", ignore.case = FALSE), starts_with("NSM", ignore.case = FALSE), starts_with("ACD", ignore.case = FALSE), starts_with("NOI", ignore.case = FALSE), starts_with("NOT", ignore.case = FALSE), starts_with("TLOC", ignore.case = FALSE), starts_with("NOCU", ignore.case = FALSE), pre, post)
+train.data.frame <- read.csv(PATH_OF_TRAINING_DATASET, sep = ";") 
+# only select FOUT, MLOC, ..., pre and post columns
+train.data.frame <- train.data.frame[ ,c('FOUT_avg', 'FOUT_max', 'FOUT_sum', 'MLOC_avg', 'MLOC_max', 'MLOC_sum', 'NBD_avg', 'NBD_max', 'NBD_sum', 'PAR_avg', 'PAR_max', 'PAR_sum', 'VG_avg', 'VG_max', 'VG_sum', 'NOF_avg', 'NOF_max', 'NOF_sum', 'NOM_avg', 'NOM_max', 'NOM_sum', 'NSF_avg', 'NSF_max', 'NSF_sum', 'NSM_avg', 'NSM_max', 'NSM_sum', 'ACD_avg', 'ACD_max', 'ACD_sum', 'NOI_avg', 'NOI_max', 'NOI_sum', 'NOT_avg', 'NOT_max', 'NOT_sum', 'TLOC_avg', 'TLOC_max', 'TLOC_sum', 'NOCU', 'pre', 'post')]
 train.data.frame <- data.matrix(train.data.frame)
 
 x.train <- train.data.frame[,1:41]
@@ -488,8 +492,9 @@ y.train <- train.data.frame[,42]
 y.train[y.train!=0] = 1
 
 # the test set is from "release 3.0"
-test.data.frame <- read_csv2("./data/eclipse-metrics-packages-3.0.csv") %>%
-  select(starts_with("FOUT", ignore.case = FALSE), starts_with("MLOC", ignore.case = FALSE), starts_with("NBD", ignore.case = FALSE), starts_with("PAR", ignore.case = FALSE), starts_with("VG", ignore.case = FALSE), starts_with("NOF", ignore.case = FALSE), starts_with("NOM", ignore.case = FALSE), starts_with("NSF", ignore.case = FALSE), starts_with("NSM", ignore.case = FALSE), starts_with("ACD", ignore.case = FALSE), starts_with("NOI", ignore.case = FALSE), starts_with("NOT", ignore.case = FALSE), starts_with("TLOC", ignore.case = FALSE), starts_with("NOCU", ignore.case = FALSE), pre, post)
+test.data.frame <- read.csv(PATH_OF_TEST_DATASET, sep = ";")
+# only select FOUT, MLOC, ..., pre and post columns
+test.data.frame <- test.data.frame[ ,c('FOUT_avg', 'FOUT_max', 'FOUT_sum', 'MLOC_avg', 'MLOC_max', 'MLOC_sum', 'NBD_avg', 'NBD_max', 'NBD_sum', 'PAR_avg', 'PAR_max', 'PAR_sum', 'VG_avg', 'VG_max', 'VG_sum', 'NOF_avg', 'NOF_max', 'NOF_sum', 'NOM_avg', 'NOM_max', 'NOM_sum', 'NSF_avg', 'NSF_max', 'NSF_sum', 'NSM_avg', 'NSM_max', 'NSM_sum', 'ACD_avg', 'ACD_max', 'ACD_sum', 'NOI_avg', 'NOI_max', 'NOI_sum', 'NOT_avg', 'NOT_max', 'NOT_sum', 'TLOC_avg', 'TLOC_max', 'TLOC_sum', 'NOCU', 'pre', 'post')]
 test.data.frame <- data.matrix(test.data.frame)
 
 x.test <- test.data.frame[,1:41]
