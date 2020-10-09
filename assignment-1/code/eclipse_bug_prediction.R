@@ -461,6 +461,15 @@ quality_measure <- function(y.actual, y.predicted) {
 }
 
 # --------------------------- Data analysis ---------------------------
+
+
+# --------------BEFORE REDOING ANALYSIS, LOAD SAVED TREES--------------
+
+# To load trees use:
+load(file = "tree_simple.RData")
+load(file = "tree_bagging.RData")
+load(file = "tree_random.RData")
+
 # 
 # --------------------------- Load the training and test dataset ---------------------------
 # read semicolon-separated files by the function read_csv2
@@ -552,7 +561,7 @@ predictions <- tibble(predictions = c(tr.simple.preds,
                                      length(tr.simple.preds)), 
                                  rep("bagging", 
                                      length(tr.bagging.preds)), 
-                                 rep("random forrest", 
+                                 rep("random forest", 
                                      length(tr.random.forest.preds))), 
                       ground_truth = c(rep(y.test, 3)), 
                       correct = ifelse(ground_truth == predictions, 1, 0)) %>%
@@ -594,6 +603,8 @@ chisq.test(accuracy.matrix.bagging.random.forest, simulate.p.value = TRUE)
 #------------------------------- Power Test -------------------------------------------
 #
 #------------------------------- Power Test for Chi-Square Test -------------------------------------------
+# Agresti(2007) p.39 - Taken from ?chisq.text documentation
+
 # power test for chi-square test between the simple tree and the tree with bagging
 group.sample <- length(y.test)
 p0.1 <- (result.simple[[2]][1] + result.simple[[2]][4] + result.bagging[[2]][1] + result.bagging[[2]][4]) / (group.sample * 2)
@@ -630,3 +641,12 @@ effect.size <- sqrt((p0.1 - p1.1.1)^2/p0.1 + (p0.1 - p1.1.2)^2/p0.1 +  (p0.2 - p
 total.samples <- group.sample * 2
 degree.freedom <- (2-1) * (2-1)
 pwr.chisq.test(w = effect.size, df = degree.freedom, N = total.samples, sig.level=0.05)
+
+
+#--------------------------Saved all trees so that we always use the same trees if we want to run tests again ----------------------
+
+#save(tr.simple, file="tree_simple.RData")
+#save(tr.bagging, file="tree_bagging.RData")
+#save(tr.random.forest, file="tree_random.RData")
+
+
