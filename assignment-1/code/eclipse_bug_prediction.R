@@ -462,14 +462,6 @@ quality_measure <- function(y.actual, y.predicted) {
 
 # --------------------------- Data analysis ---------------------------
 
-
-# --------------BEFORE REDOING ANALYSIS, LOAD SAVED TREES--------------
-
-# To load trees use:
-load(file = "tree_simple.RData")
-load(file = "tree_bagging.RData")
-load(file = "tree_random.RData")
-
 # 
 # --------------------------- Load the training and test dataset ---------------------------
 # read semicolon-separated files by the function read_csv2
@@ -496,7 +488,12 @@ y.test[y.test!=0] = 1
 nmin <- 15
 minleaf <- 5
 nfeat <- 41
-tr.simple <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
+#tr.simple <- tree_grow(x.train, y.train, nmin, minleaf, nfeat)
+
+# --------------BEFORE RE-DOING ANALYSIS, LOAD SAVED TREES--------------
+
+# To load trees use:
+load(file = "tree_simple.RData")
 
 # predict based on the single classification tree on the test set
 tr.simple.preds <- tree_pred(x.test, tr.simple)
@@ -510,7 +507,13 @@ perf.simple <- result.simple[[1]] %>% mutate(model = "single tree")
 # --------------------------- The classification tree by bagging ---------------------------
 # train the classification tree by bagging on the training set
 m <- 100
-tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
+#tr.bagging <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
+
+# --------------BEFORE RE-DOING ANALYSIS, LOAD SAVED TREES--------------
+
+# To load trees use:
+load(file = "tree_bagging.RData")
+
 
 # predict based on the classification tree by bagging on the test set
 tr.bagging.preds <- tree_pred_b(x.test, tr.bagging)
@@ -524,7 +527,12 @@ perf.bagging <- result.bagging[[1]] %>% mutate(model = "bagging")
 # --------------------------- The classification tree by random forest ---------------------------
 # train the classification tree by random forest on the training set
 nfeat <- 6
-tr.random.forest <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
+#tr.random.forest <- tree_grow_b(x.train, y.train, nmin, minleaf, nfeat, m)
+
+# --------------BEFORE RE-DOING ANALYSIS, LOAD SAVED TREES--------------
+
+# To load trees use:
+load(file = "tree_random.RData")
 
 # predict based on the classification tree by random forest on the test set
 tr.random.forest.preds <- tree_pred_b(x.test, tr.random.forest)
