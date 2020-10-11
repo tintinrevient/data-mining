@@ -149,6 +149,15 @@ Concepts:
 * **Data distribution**: the frequency distribution of individual values in one sample
 * **Sampling distribution**: the frequency distribution of a **sample statistic** over many samples
 * **Central limit theorem**: the tendency of the sampling distribution to take on a normal shape as sample size rises
+	* **Hypothesis test** ~ **p-value**
+	* **Confidence interval** ~ **Significance (alpha) level**, e.g., **confidence interval** = 95%, then **significance level** = 0.05
+	* If the **p-value** is less than your **significance level**, the hypothesis test is statistically significant.
+	* If the **confidence interval** does not contain the null hypothesis value, the hypothesis test is statistically significant.
+	* If the **p-value** is less than your **significance level**, the **confidence interval** will not contain the null hypothesis value.
+
+<p float="left">
+  <img src="./pix/confidence-interval.png" width="600">
+</p>
 
 Examples:
 * value = annual income
