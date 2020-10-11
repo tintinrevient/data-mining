@@ -143,6 +143,24 @@ Concepts:
   <img src="./pix/sampling_bias.png" width="350">
 </p>
 
+## Sampling distribution
+
+Concepts:
+* **Data distribution**: the frequency distribution of individual values in one sample
+* **Sampling distribution**: the frequency distribution of a **sample statistic** over many samples
+* **Central limit theorem**: the tendency of the sampling distribution to take on a normal shape as sample size rises
+
+Examples:
+* value = annual income
+* **Data distribution**: a sample of 1000 values (1 sample, sample size = 1000)
+* **Sampling distribution**: a sample of 1000 means of 5 values (1000 samples, sample size = 5)
+* **Sampling distribution**: a sample of 1000 means of 20 values (1000 samples, sample size = 20)
+
+<p float="left">
+  <img src="./pix/sampling_distribution.png" width="500">
+</p>
+
+
 ## Reference:
 * https://www.youtube.com/watch?v=RAwlr6FGhjo
 * https://www.statmethods.net/stats/power.html
