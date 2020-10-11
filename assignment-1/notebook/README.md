@@ -154,6 +154,8 @@ Concepts:
 	* If the **p-value** is less than your **significance level**, the hypothesis test is statistically significant.
 	* If the **confidence interval** does not contain the null hypothesis value, the hypothesis test is statistically significant.
 	* If the **p-value** is less than your **significance level**, the **confidence interval** will not contain the null hypothesis value.
+* **Standard error**: the variability in the **sampling distribution** for a **sample statistic**
+* **Standard deviation**: the variability in the **data distribution** for individual values
 
 <p float="left">
   <img src="./pix/confidence-interval.png" width="600">
@@ -169,6 +171,21 @@ Examples:
   <img src="./pix/sampling_distribution.png" width="500">
 </p>
 
+## Bootstrap
+
+<p float="left">
+  <img src="./pix/boostrap.png" width="700">
+</p>
+
+Resampling:
+1. For a sample of size n, draw a sample value, record, replace it
+2. Repeat n times
+3. Record the mean of the n resampled values
+4. Repeat steps 1-3 R times
+5. Use the R results to:
+	* Calculate their **standard deviation** (this estimates sample mean **standard error**)
+	* Produce a **histogram**
+	* Find a **confidence interval**
 
 ## Reference:
 * https://www.youtube.com/watch?v=RAwlr6FGhjo
