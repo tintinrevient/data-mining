@@ -23,9 +23,17 @@ knitr::opts_chunk$set(echo = TRUE)
 # TO DO
 
 - Normalise data before training
-- Cross-validate random forrest parameters
+  - Check if necessary: https://stats.stackexchange.com/questions/29781/when-conducting-multiple-regression-when-should-you-center-your-predictor-varia
+- Cross-validate/choose random forest parameters 
+  - ntree
+  - mtry
 - Visualise more of the results
-- Write more explanations, figure captures, etcetera
+- Write more explanations, figure captions, table captions, etcetera
+  - figure captions are done in the chunk-header
+  - kable captions are done in the 'kable()' function. 
+  - Latex code can be used for references and labels
+    - for the tables: https://stackoverflow.com/questions/54082814/adding-label-in-kable-kableextra-latex-output
+    - for the figures: https://cran.r-project.org/web/packages/officedown/vignettes/captions.html
 
 # 0. Pre-processing
 
