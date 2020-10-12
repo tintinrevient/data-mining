@@ -22,6 +22,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # TO DO
 
+- How to best handle sparsity in dtm?
 - Normalise data before training
   - Check if necessary: https://stats.stackexchange.com/questions/29781/when-conducting-multiple-regression-when-should-you-center-your-predictor-varia
 - Cross-validate/choose random forest parameters 
