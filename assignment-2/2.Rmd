@@ -1,0 +1,436 @@
+---
+title: 'Assignment 2: Classification for the Detection of Opinion Spam'
+author: "Anouk van der Lee (6620590), Shu Zhao (6833519), Fleur Petit (5583837)"
+date: "`r format(Sys.time(), '%d, %B, %Y')`"
+output: 
+  pdf_document:
+    toc : true
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tm)
+library(knitr)
+library(glmnet)
+library(randomForest)
+library(SnowballC)
+library(broom)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# TO DO
+
+- Normalise data before training
+- Cross-validate random forrest parameters
+- Visualise more of the results
+- Write more explanations, figure captures, etcetera
+
+# 0. Pre-processing
+
+## Load reviews
+
+```{r prepare_df}
+
+
+df <- NULL
+
+file_names <-
+  list.files(path = "negative_polarity", recursive = T)
+
+for (name in file_names)
+  df <- bind_rows(df,
+    list(label = as.numeric(str_detect(name, "truthful")), # 0 for deceptive and 1 for truthful
+      fold = as.numeric(str_extract(name, pattern = regex('\\d'))),
+      hotel = str_extract(name, pattern = regex('[a-z]*_\\d+')),
+      review = read_file(str_c("negative_polarity/", name))
+    )
+  )
+
+df <- df %>%
+  mutate(id = as.numeric(str_extract(hotel, pattern = regex('\\d+'))),
+         hotel = str_extract(hotel, pattern = regex('[a-z]*'))
+         )
+
+
+head(df, 2) %>%
+  kable()
+
+```
+
+## Prepare corpus
+
+```{r prepare_corpus}
+
+corpus <- VCorpus(VectorSource(df[["review"]])) %>%
+  tm_map(., content_transformer(tolower)) %>% # no capital letters
+  tm_map(., stripWhitespace) %>% # remove extra white space
+  tm_map(., removeWords, stopwords("english")) %>% # remove stopwords
+  tm_map(., stemDocument) # stem words
+
+```
+
+## Get word frequency matrix
+
+```{r frequency}
+
+dtm <- DocumentTermMatrix(corpus) %>%
+  removeSparseTerms(., sparse = 0.7) # those terms from x are removed which have at least a 70
+# percent of empty (i.e., terms occurring 0 times in a document) elements. I.e., the resulting
+# matrix contains only terms with a sparse factor of less than 70 percent
+
+
+inspect(dtm)
+
+```
+
+## Vector with labels
+
+```{r labels}
+
+labels <- df[["label"]]
+
+labels[c(1:10, 790:800)]
+
+```
+
+## Random split in train and test data
+
+```{r train_test_split}
+
+train_ind <- sample(1:nrow(df), size = nrow(df)*0.75)
+
+train_dtm <- as.matrix(dtm)[train_ind,]
+train_labels <- labels[train_ind]
+
+test_dtm <- as.matrix(dtm)[-train_ind,]
+test_labels <- labels[-train_ind]
+
+
+```
+
+# 1. Multinomial naive Bayes (generative linear classifier)
+
+## Function for multinomial Bayes classifier
+
+```{r mnb}
+
+# Function for multinomial naive Bayes
+
+train.mnb <- function (dtm, labels) {
+  call <- match.call()
+  V <- ncol(dtm)
+  N <- nrow(dtm)
+  prior <- table(labels) / N
+  labelnames <- names(prior)
+  nclass <- length(prior)
+  cond.probs <- matrix(nrow = V, ncol = nclass)
+  dimnames(cond.probs)[[1]] <- dimnames(dtm)[[2]]
+  dimnames(cond.probs)[[2]] <- labelnames
+  index <- list(length = nclass)
+  for (j in 1:nclass) {
+    index[[j]] <- c(1:N)[labels == labelnames[j]]
+  }
+  
+  for (i in 1:V) {
+    for (j in 1:nclass) {
+      cond.probs[i, j] <-
+        (sum(dtm[index[[j]], i]) + 1) / (sum(dtm[index[[j]], ]) + V)
+    }
+  }
+  list(call = call,
+       prior = prior,
+       cond.probs = cond.probs)
+}
+
+predict.mnb <- function (model, dtm) {
+    classlabels <- dimnames(model$cond.probs)[[2]]
+    logprobs <- dtm %*% log(model$cond.probs)
+    N <- nrow(dtm)
+    nclass <- ncol(model$cond.probs)
+    logprobs <-
+      logprobs + matrix(nrow = N,
+                        ncol = nclass,
+                        log(model$prior),
+                        byrow = T)
+    classlabels[max.col(logprobs)]
+  }
+
+
+```
+
+## Train
+
+```{r train_mnb}
+
+mnb_model <- train.mnb(train_dtm, train_labels)
+
+mnb_model
+
+```
+
+## Predict
+
+```{r predict_mnb}
+
+predicted_mnb <- predict.mnb(mnb_model, test_dtm)
+
+```
+
+## Confusion matrix
+
+```{r confusion_mnb}
+
+conf_mnb <- table(test_labels, predicted_mnb)
+
+conf_mnb
+
+```
+
+## Performance metrics
+
+```{r performance_mnb}
+
+performance <- function(confusion_matrix){
+  tn <- confusion_matrix[1,1]
+  fn <- confusion_matrix[2,1]
+  n_pred <- tn+fn
+  
+  fp <- confusion_matrix[1,2]
+  tp <- confusion_matrix[2,2]
+  p_pred <- fp+tp
+  
+  n <- tn+fp
+  p <- fn+tp
+  
+  performance_metrics <- tibble(metric = c("recall",
+                                "miss-rate", # 1 - recall
+                                "fall-out", # 1 - selectivity
+                                "selectivity",
+                                "prevalence",
+                                "precision",
+                                "false omission rate", # 1 - neg_predictive_value
+                                "pos likelihood ratio",
+                                "neg likelihood ratio",
+                                "accuracy",
+                                "false discovery rate", # 1 - precision
+                                "neg predictive value",
+                                "diagnostic odds ratio",
+                                "F1"),
+                      value = c(tp/p, # recall
+                               fn/p, # 1 - recall
+                               fp/n, # 1 - selectivity
+                               tn/n, # selectivity
+                               p/(n+p), # prevalence
+                               tp/p_pred, # precision
+                               fn/n_pred, # 1 - neg_predictive_value
+                               (tp/p)/(fp/n), # positive likelihood ratio
+                               (fn/p)/(tn/n), # negative likelihood ratio
+                               (tp+tn)/(n+p), # accuracy
+                               fp/p_pred, # 1 - precision
+                               tn/n_pred, # negative predictive value
+                               ((tp/p)/(fp/n))/((fn/p)/(tn/n)), # diagnostic odds ratio
+                               2*(tp/p_pred)*(tp/p)/((tp/p_pred) + (tp/p))) # F1
+  )
+  
+  performance_metrics
+}
+
+perf_mnb <-performance(conf_mnb) 
+
+perf_mnb %>% kable()
+
+
+```
+
+# 2. Regularised logistic regression (discriminative linear classifier)
+
+## Choose lambda
+
+```{r cv_lasso}
+
+# Use LASSO (penalising for number of parameters)
+# Determine lambda by means of cross validation
+
+set.seed(1)
+
+cv_lasso <- cv.glmnet(train_dtm, train_labels, alpha = 1, family = "binomial")
+
+plot(cv_lasso)
+
+```
+
+## Train
+
+```{r train_glm}
+
+model_glm <- glmnet(train_dtm, train_labels, alpha = 1, family = "binomial", 
+                    lambda = cv_lasso$lambda.1se) # I choose the largest lambda within 1se from the smallest lambda
+
+
+```
+
+## Predict
+
+```{r predict_glm}
+
+#test_dtm_glm <- model.matrix(test_labels ~ test_dtm)[,-1]
+
+probabilities_glm <- predict(model_glm, 
+                             newx = test_dtm, 
+                             type = "response", # Type "response" gives the fitted probabilities for "binomial"
+                             s= cv_lasso$lambda.1se)
+
+predicted_glm <- ifelse(probabilities_glm > 0.5, 1, 0)
+
+```
+
+## Confusion matrix
+
+```{r confusion_glm}
+
+conf_glm <- table(test_labels, predicted_glm)
+
+conf_glm
+
+```
+
+
+## Performance metrics
+
+```{r performance_glm}
+
+perf_glm <- performance(conf_glm)
+
+perf_glm %>% kable()
+
+```
+
+# 3. Classification trees (flexible classifier)
+
+
+## Train
+
+```{r train_tree}
+
+model_tree <- randomForest(x = train_dtm, y = train_labels, ntree = 1, mtry = ncol(train_dtm))
+
+```
+
+## Predict
+
+```{r predict_tree}
+
+probabilities_tree <- predict(model_tree, test_dtm, type = "response")
+
+predicted_tree <- ifelse(probabilities_tree > 0.5, 1, 0)
+
+```
+
+## Confusion matrix 
+
+```{r conf_tree}
+
+conf_tree <- table(test_labels, predicted_tree)
+
+conf_tree
+
+```
+
+## Performance metrics
+
+```{r performance_tree}
+
+perf_tree <- performance(conf_tree)
+
+perf_tree %>% kable()
+
+```
+
+
+# 4. Random forests (flexible classifier)
+
+```{r train_random}
+
+# TO DO: cross validate for mtry (caret package)
+
+model_random <- randomForest(x = train_dtm, y = train_labels, ntree = 10, mtry = 5)
+
+```
+
+## Predict
+
+```{r predict_random}
+
+probabilities_random <- predict(model_random, test_dtm, type = "response")
+
+predicted_random <- ifelse(probabilities_random > 0.5, 1, 0)
+
+```
+
+## Confusion matrix 
+
+```{r conf_random}
+
+conf_random <- table(test_labels, predicted_random)
+
+conf_random
+
+```
+
+## Performance metrics
+
+```{r performance_random}
+
+perf_random <- performance(conf_random)
+
+perf_random %>% kable()
+
+```
+
+# Comparison
+
+## Performance metrics
+
+```{r perf_compare}
+
+perf_compare <- tibble(metric = perf_mnb[["metric"]],
+                       mnb = perf_mnb[["value"]],
+                       glm = perf_glm[["value"]],
+                       tree = perf_tree[["value"]],
+                       random = perf_random[["value"]])
+
+perf_compare %>% kable()
+
+
+```
+
+## Logistic regression
+
+
+```{r}
+
+predictions_per_model <- tibble(predictions = c(predicted_mnb, 
+                                      as.vector(predicted_glm), 
+                                      predicted_tree,
+                                      predicted_random),
+                      models = c(rep("mnb", 
+                                     length(predicted_mnb)), 
+                                 rep("logistic regression", 
+                                     nrow(predicted_glm)), 
+                                 rep("single tree", 
+                                     length(predicted_tree)),
+                                 rep("random forest",
+                                     length(predicted_random))), 
+                      ground_truth = c(rep(test_labels, 4)), 
+                      correct = ifelse(ground_truth == predictions, 1, 0)) %>%
+  mutate(models = factor(models,levels=c("mnb", "logistic regression", "single tree", "random forest")))
+
+
+glm(correct ~ models, family = "binomial", data = predictions_per_model) %>% 
+  tidy() %>%
+  kable()
+
+
+```
