@@ -201,6 +201,7 @@ Resampling:
 Observations:
 * Most data is not normally distributed
 * Assuming a normal distribution can lead to underestimation of extreme events: e.g., **long-tailed distribution**
+* **QQ-Plot** can visualize how close a sample distribution is to a normal distribution
 
 <p float="left">
   <img src="./pix/qq-plot-1.png" width="450">
