@@ -196,6 +196,17 @@ Resampling:
   <img src="./pix/normal_distribution.png" width="700">
 </p>
 
+## QQ-Plot
+
+Observations:
+* Most data is not normally distributed
+* Assuming a normal distribution can lead to underestimation of extreme events: e.g., **long-tailed distribution**
+
+<p float="left">
+  <img src="./pix/qq-plot-1.png" width="450">
+  <img src="./pix/qq-plot-2.png" width="450">
+</p>
+
 ## Reference:
 * https://www.youtube.com/watch?v=RAwlr6FGhjo
 * https://www.statmethods.net/stats/power.html
