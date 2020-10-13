@@ -180,7 +180,7 @@ Types:
 
 * **Poisson distribution**:
 	* the frequency distribution of the number of events in sampled units of time or space
-	* lambda = the mean number of events that occurs per unit of time or space
+	* **lambda** = the mean number of events that occurs per unit of time or space
 
 Examples:
 * value = annual income
