@@ -190,6 +190,12 @@ Resampling:
 		* confidence interval = how variable a sample result might be
 		* the higher the level of confidence, the less the data, the wider the confidence interval
 
+## Normal distribution
+
+<p float="left">
+  <img src="./pix/normal_distribution.png" width="700">
+</p>
+
 ## Reference:
 * https://www.youtube.com/watch?v=RAwlr6FGhjo
 * https://www.statmethods.net/stats/power.html
