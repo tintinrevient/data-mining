@@ -157,6 +157,16 @@ Concepts:
 * **Standard error**: the variability in the **sampling distribution** for a **sample statistic**
 * **Standard deviation**: the variability in the **data distribution** for individual values
 
+Types:
+* **Student's t-distribution**
+	* a family of distributions resembling the normal distribution
+	* it is used to depict distributions of sample statistics: e.g., the distribution of sample means, differences between two sample means, regression parameters
+* **Binomial distribution**: 
+	* the frequency distribution of the number of **successes (x)** in a given number of **trials (n)** with specified **probability (p) of success** in each trial
+	* mean = n * p
+	* variance = n * p(1-p)
+	* with large n, and provided p is not too close to 0 or 1, the binomial ditribution can be approximated by the normal distribution
+
 <p float="left">
   <img src="./pix/confidence-interval.png" width="600">
 </p>
