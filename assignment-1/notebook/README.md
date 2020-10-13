@@ -185,7 +185,10 @@ Resampling:
 5. Use the R results to:
 	* Calculate their **standard deviation** (this estimates sample mean **standard error**)
 	* Produce a **histogram**
-	* Find a **confidence interval**: x% confidence interval = x% of the time
+	* Find a **confidence interval**
+		* x% confidence interval = x% of the time
+		* confidence interval = how variable a sample result might be
+		* the higher the level of confidence, the less the data, the wider the confidence interval
 
 ## Reference:
 * https://www.youtube.com/watch?v=RAwlr6FGhjo
