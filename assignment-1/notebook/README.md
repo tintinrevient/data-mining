@@ -165,7 +165,7 @@ Types:
 * **Student's t-distribution**
 	* a family of distributions resembling the normal distribution
 	* it is used to depict distributions of sample statistics: e.g., the distribution of sample means, differences between two sample means, regression parameters
-	* a 90% confidence interval around the sample mean is given as below
+	* a 90% confidence interval around the sample mean is given as below: t = t-statistic
 
 <p float="left">
   <img src="./pix/t-statistic-3.png" width="250">
