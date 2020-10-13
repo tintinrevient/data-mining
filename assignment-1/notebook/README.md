@@ -178,6 +178,10 @@ Types:
 	* variance = n * p(1-p)
 	* with large n, and provided p is not too close to 0 or 1, the binomial ditribution can be approximated by the normal distribution
 
+* **Poisson distribution**:
+	* the frequency distribution of the number of events in sampled units of time or space
+	* lambda = the mean number of events that occurs per unit of time or space
+
 Examples:
 * value = annual income
 * **Data distribution**: a sample of 1000 values (1 sample, sample size = 1000)
