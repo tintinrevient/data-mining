@@ -35,6 +35,7 @@ knitr::opts_chunk$set(echo = TRUE)
   - Latex code can be used for references and labels
     - for the tables: https://stackoverflow.com/questions/54082814/adding-label-in-kable-kableextra-latex-output
     - for the figures: https://cran.r-project.org/web/packages/officedown/vignettes/captions.html
+- Add analyses of a bi-grams dtm
 
 # 0. Pre-processing
 
