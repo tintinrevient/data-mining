@@ -229,6 +229,29 @@ Observations:
   <img src="./pix/qq-plot-2.png" width="450">
 </p>
 
+## Simple (Multiple) linear regression
+
+<p float="left">
+  <img src="./pix/simple-linear-regression.png" width="700">
+</p>
+
+Metrics:
+* RSS (Residual Sum of Squares)
+* RMSE (Root Mean Squared Error)
+* RSE (Residual Standard Error)
+* R squared: the proportion of variation in the data ranging from 0 to 1
+* t-statistic
+* RSS/RMSE/RSE reduces, R squared increases
+* The higher the t-statistic, and the lower the p-value, the more significant the predictor
+
+<p float="left">
+  <img src="./pix/residual-sum-of-squares.png" width="250">
+  <img src="./pix/root-mean-squared-error.png" width="250">
+  <img src="./pix/residual-standard-error.png" width="250">
+  <img src="./pix/r-squared.png" width="250">
+  <img src="./pix/t-statistic.png" width="250">
+</p>
+
 ## Reference:
 * https://www.youtube.com/watch?v=RAwlr6FGhjo
 * https://www.statmethods.net/stats/power.html
