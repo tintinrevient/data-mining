@@ -249,7 +249,7 @@ Metrics:
   <img src="./pix/root-mean-squared-error.png" width="250">
   <img src="./pix/residual-standard-error.png" width="250">
   <img src="./pix/r-squared.png" width="250">
-  <img src="./pix/t-statistic.png" width="200">
+  <img src="./pix/t-statistic.png" width="150">
 </p>
 
 ## Reference:
