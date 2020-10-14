@@ -232,7 +232,7 @@ Observations:
 ## Simple (Multiple) linear regression
 
 <p float="left">
-  <img src="./pix/simple-linear-regression.png" width="700">
+  <img src="./pix/simple-linear-regression.png" width="600">
 </p>
 
 Metrics:
