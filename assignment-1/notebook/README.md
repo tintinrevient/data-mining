@@ -237,9 +237,9 @@ Observations:
 
 Metrics:
 * RSS (Residual Sum of Squares)
-* RMSE (Root Mean Squared Error)
+* **RMSE** (Root Mean Squared Error)
 * RSE (Residual Standard Error)
-* R squared: the proportion of variation in the data ranging from 0 to 1
+* **R squared**: the proportion of variation in the data ranging from 0 to 1
 * t-statistic
 * RSS/RMSE/RSE reduces, R squared increases
 * The higher the t-statistic, and the lower the p-value, the more significant the predictor
@@ -251,6 +251,14 @@ Metrics:
   <img src="./pix/r-squared.png" width="250">
   <img src="./pix/t-statistic.png" width="150">
 </p>
+
+Bootstrap:
+1. Combine all the n records in a single box
+2. Shuffle and draw out a record at random, record the values, and replace it in the box
+3. Repeat step 2 n times, and you now have **one** bootstrap resample
+4. Fit a regression to the bootstrap sample, and record the estimated coefficients
+5. Repeat steps 3-4 many times
+6. You now have many bootstrap values for each coefficient; find the **confidence interval** and **standard error** for each one
 
 ## Reference:
 * https://www.youtube.com/watch?v=RAwlr6FGhjo
