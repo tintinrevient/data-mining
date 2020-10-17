@@ -332,7 +332,7 @@ ggplot(data = df, mapping = aes(x = SqFtTotLiving, y = PartialResidual)) +
 ```
 
 <p float="left">
-  <img src="./pix/partial-residual-plot.png" width="600">
+  <img src="./pix/partial-residual-plot.png" width="500">
 </p>
 
 Records:
@@ -359,7 +359,7 @@ abline(h = c(-2.5, 2.5), lty = 2)
 ```
 
 <p float="left">
-  <img src="./pix/high-influence-plot.png" width="600">
+  <img src="./pix/high-influence-plot.png" width="500">
 </p>
 
 **Heteroskedastic**:
@@ -372,7 +372,7 @@ ggplot(data = df, mapping = aes(x = Prediction, y = abs(Residual))) + geom_point
 ```
 
 <p float="left">
-  <img src="./pix/heterostedasticity.png" width="600">
+  <img src="./pix/heterostedasticity.png" width="500">
 </p>
 
 
