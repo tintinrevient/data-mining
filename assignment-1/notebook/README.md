@@ -260,7 +260,7 @@ Bootstrap:
 5. Repeat steps 3-4 many times
 6. You now have many bootstrap values for each coefficient; find the **confidence interval** and **standard error** for each one
 
-Variables
+Variables:
 * **Correlated variables**: when the predictor variables are highly correlated, it is difficult to interpret the individual coefficients, e.g., bedrooms and house size are correlated
 
 ```
@@ -351,6 +351,19 @@ abline(h = c(-2.5, 2.5), lty = 2)
 
 <p float="left">
   <img src="./pix/high-influence-plot.png" width="600">
+</p>
+
+Heteroskedastic:
+* For formal inference to be fully valid, the residuals are assumed to be normally distributed, have the same variance, and be independent
+* Heteroskedasticity is the lack of constant residual variance across the range of the predicted values, e.g., errors are greater for some portions of the range than for others
+
+```
+df <- data.frame(Residual <- residuals(lm_98105), Prediction <- predict(lm_98105))
+ggplot(data = df, mapping = aes(x = Prediction, y = abs(Residual))) + geom_point() + geom_smooth()
+```
+
+<p float="left">
+  <img src="./pix/heterostedasticity.png" width="600">
 </p>
 
 
