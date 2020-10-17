@@ -353,7 +353,7 @@ abline(h = c(-2.5, 2.5), lty = 2)
   <img src="./pix/high-influence-plot.png" width="600">
 </p>
 
-Heteroskedastic:
+**Heteroskedastic**:
 * For formal inference to be fully valid, the residuals are assumed to be normally distributed, have the same variance, and be independent
 * Heteroskedasticity is the lack of constant residual variance across the range of the predicted values, e.g., errors are greater for some portions of the range than for others
 
