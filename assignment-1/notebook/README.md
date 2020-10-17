@@ -260,6 +260,100 @@ Bootstrap:
 5. Repeat steps 3-4 many times
 6. You now have many bootstrap values for each coefficient; find the **confidence interval** and **standard error** for each one
 
+Variables
+* **Correlated variables**: when the predictor variables are highly correlated, it is difficult to interpret the individual coefficients, e.g., bedrooms and house size are correlated
+
+```
+house_lm <- lm(AdjSalePrice ~ SqFtTotLiving + SqFtLot + Bathrooms + Bedrooms + BldgGrade, data = house, na.action = na.omit)
+house_lm$coefficients
+
+(Intercept) SqFtTotLiving       SqFtLot     Bathrooms      Bedrooms     BldgGrade 
+-5.219247e+05  2.288321e+02 -6.050601e-02 -1.943810e+04 -4.778115e+04  1.061172e+0
+
+update(house_lm, . ~ . - SqFtTotLiving - Bathrooms)
+
+(Intercept)      SqFtLot     Bedrooms    BldgGrade  
+ -1.158e+06    5.118e-01    3.095e+04    2.100e+05  
+```
+
+* **Confounding variables**: an important predictor that, when omitted, leads to spurious relationships in a regression equation
+* **Main effects**: the relationship between a predictor and the outcome variable, independent from other variables
+* **Interactions**: an interdependent relationship between two or more predictors and the response
+
+```
+lm(AdjSalePrice ~ SqFtTotLiving + SqFtLot + Bathrooms + Bedrooms + BldgGrade + PropertyType + as.factor(ZipGroup), 
+   data = house, 
+   na.action = na.omit)
+
+(Intercept)              SqFtTotLiving                    SqFtLot                  Bathrooms  
+               -6.709e+05                  2.112e+02                  4.692e-01                  5.537e+03  
+                 Bedrooms                  BldgGrade  PropertyTypeSingle Family      PropertyTypeTownhouse  
+               -4.139e+04                  9.893e+04                  2.113e+04                 -7.741e+04  
+     as.factor(ZipGroup)2       as.factor(ZipGroup)3       as.factor(ZipGroup)4       as.factor(ZipGroup)5  
+                5.169e+04                  1.142e+05                  1.783e+05                  3.391e+05
+
+lm(AdjSalePrice ~ SqFtTotLiving * as.factor(ZipGroup) + SqFtLot + Bathrooms + Bedrooms + BldgGrade + PropertyType, 
+   data = house, 
+   na.action = na.omit)
+
+(Intercept)                       SqFtTotLiving                as.factor(ZipGroup)2  
+                        -4.919e+05                           1.176e+02                          -1.342e+04  
+              as.factor(ZipGroup)3                as.factor(ZipGroup)4                as.factor(ZipGroup)5  
+                         2.254e+04                           1.776e+04                          -1.555e+05  
+                           SqFtLot                           Bathrooms                            Bedrooms  
+                         7.176e-01                          -5.130e+03                          -4.181e+04  
+                         BldgGrade           PropertyTypeSingle Family               PropertyTypeTownhouse  
+                         1.053e+05                           1.603e+04                          -5.629e+04  
+SqFtTotLiving:as.factor(ZipGroup)2  SqFtTotLiving:as.factor(ZipGroup)3  SqFtTotLiving:as.factor(ZipGroup)4  
+                         3.165e+01                           3.893e+01                           7.051e+01  
+SqFtTotLiving:as.factor(ZipGroup)5  
+                         2.298e+02
+```
+
+* **Partial residuals** = Residuals + biXi
+	* The regression line underestimates the sales price for homes less than 1000 square feet
+	* The regression line overestimates the sales price for homes between 2000 and 3000 square feet
+	* There are too few data points above 4000 square feet to draw conclusions for those homes
+	* Instead of a simple linear term for 'SqFtTotLiving', a nonlinear term should be considered, e.g. **polynomial regression**, **spline regression**
+
+```
+residual <- residuals(lm_98105)
+terms <- predict(lm_98105, type = 'terms')
+partial_residual <- residual + terms
+
+df <- data.frame(SqFtTotLiving = house_98105[, 'SqFtTotLiving'],
+                 Terms = terms[, 'SqFtTotLiving'],
+                 PartialResidual = partial_residual[, 'SqFtTotLiving'])
+
+ggplot(data = df, mapping = aes(x = SqFtTotLiving, y = PartialResidual)) +
+  geom_point(shape = 1) + scale_shape(solid = FALSE) +
+  geom_smooth(linetype = 2) +
+  geom_line(aes(SqFtTotLiving, Terms))
+```
+
+<p float="left">
+  <img src="./pix/partial-residual-plot.png" width="600">
+</p>
+
+Records:
+* **Outliers**: records that are distant from the rest of the data (or the predicted outcome)
+* **Influential value**: a record whose presence or absence makes a big difference in the regression equation
+* **Standardized residuals**: residuals divided by the standard error of the residuals
+
+```
+standard_residual <- rstandard(lm_98105)
+cooks_distance <- cooks.distance(lm_98105)
+hatvalues <- hatvalues(lm_98105)
+
+plot(hatvalues, standard_residual, cex = 10 * sqrt(cooks_distance))
+abline(h = c(-2.5, 2.5), lty = 2)
+```
+
+<p float="left">
+  <img src="./pix/high-influence-plot.png" width="600">
+</p>
+
+
 ## Reference:
 * https://www.youtube.com/watch?v=RAwlr6FGhjo
 * https://www.statmethods.net/stats/power.html
