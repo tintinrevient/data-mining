@@ -339,6 +339,15 @@ Records:
 * **Outliers**: records that are distant from the rest of the data (or the predicted outcome)
 * **Influential value**: a record whose presence or absence makes a big difference in the regression equation
 * **Standardized residuals**: residuals divided by the standard error of the residuals
+* **Cook's distance**: 
+	* it shows the influence of each observation on the fitted response values
+	* an observation has high influence, if **Cook's distance** exceeds 4 / (n - P - 1)
+* **hat-value**:
+	* an observation has high influence,  if **hat-value** exceeds 2(P + 1) / n
+
+<p float="left">
+  <img src="./pix/cooks-distance.png" width="500">
+</p>
 
 ```
 standard_residual <- rstandard(lm_98105)
