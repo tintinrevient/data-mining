@@ -1,0 +1,355 @@
+---
+title: 'Assignment 2: Classification for the Detection of Opinion Spam'
+author: "Anouk van der Lee (6620590), Shu Zhao (6833519), Fleur Petit (5583837)"
+date: "`r format(Sys.time(), '%d, %B, %Y')`"
+output: 
+  pdf_document:
+    toc : true
+---
+
+```{r library, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tm)
+library(entropy)
+library(SnowballC)
+library(glmnet)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(ROCit)
+```
+
+```{r basic_functions, include=FALSE}
+# train by multi-normial bayes
+train.mnb <- function (dtm,labels) {
+  call <- match.call()
+  V <- ncol(dtm)
+  N <- nrow(dtm)
+  prior <- table(labels)/N
+  labelnames <- names(prior)
+  nclass <- length(prior)
+  cond.probs <- matrix(nrow=V,ncol=nclass)
+  dimnames(cond.probs)[[1]] <- dimnames(dtm)[[2]]
+  dimnames(cond.probs)[[2]] <- labelnames
+  index <- list(length=nclass)
+  for(j in 1:nclass){
+    index[[j]] <- c(1:N)[labels == labelnames[j]]
+  }
+  
+  for(i in 1:V){
+    for(j in 1:nclass){
+      cond.probs[i,j] <- (sum(dtm[index[[j]],i])+1)/(sum(dtm[index[[j]],])+V)
+    }
+  }
+  list(call=call,prior=prior,cond.probs=cond.probs)    
+}
+
+# predict by multi-normial bayes
+predict.mnb <- function (model,dtm) {
+  classlabels <- dimnames(model$cond.probs)[[2]]
+  logprobs <- dtm %*% log(model$cond.probs)
+  N <- nrow(dtm)
+  nclass <- ncol(model$cond.probs)
+  logprobs <- logprobs+matrix(nrow=N,ncol=nclass,log(model$prior),byrow=T)
+  classlabels[max.col(logprobs)]
+}
+
+# performance metrics
+performance <- function(confusion_matrix){
+  tn <- confusion_matrix[1,1]
+  fn <- confusion_matrix[2,1]
+  n_pred <- tn+fn
+  
+  fp <- confusion_matrix[1,2]
+  tp <- confusion_matrix[2,2]
+  p_pred <- fp+tp
+  
+  n <- tn+fp
+  p <- fn+tp
+  
+  performance_metrics <- tibble(metric = c("recall",
+                                "miss-rate", # 1 - recall
+                                "fall-out", # 1 - selectivity
+                                "selectivity",
+                                "prevalence",
+                                "precision",
+                                "false omission rate", # 1 - neg_predictive_value
+                                "pos likelihood ratio",
+                                "neg likelihood ratio",
+                                "accuracy",
+                                "false discovery rate", # 1 - precision
+                                "neg predictive value",
+                                "diagnostic odds ratio",
+                                "F1"),
+                      value = c(tp/p, # recall
+                               fn/p, # 1 - recall
+                               fp/n, # 1 - selectivity
+                               tn/n, # selectivity
+                               p/(n+p), # prevalence
+                               tp/p_pred, # precision
+                               fn/n_pred, # 1 - neg_predictive_value
+                               (tp/p)/(fp/n), # positive likelihood ratio
+                               (fn/p)/(tn/n), # negative likelihood ratio
+                               (tp+tn)/(n+p), # accuracy
+                               fp/p_pred, # 1 - precision
+                               tn/n_pred, # negative predictive value
+                               ((tp/p)/(fp/n))/((fn/p)/(tn/n)), # diagnostic odds ratio
+                               2*(tp/p_pred)*(tp/p)/((tp/p_pred) + (tp/p))) # F1
+  )
+  
+  performance_metrics
+}
+```
+
+# Dataset for training, validation and test
+
+## Dataset split
+
+```{r load_reviews, include=FALSE}
+# Read in the data using UTF-8 encoding
+reviews.true <- VCorpus(DirSource(file.path("data", "op_spam_v1.4", "negative_polarity", "truthful_from_Web"), 
+                                      encoding = "UTF-8",
+                                      recursive = TRUE))
+reviews.false <- VCorpus(DirSource(file.path("data", "op_spam_v1.4", "negative_polarity", "deceptive_from_MTurk"), 
+                                       encoding = "UTF-8",
+                                       recursive = TRUE))
+# Join true and false reviews into a single Corpus
+reviews.all <- c(reviews.true, reviews.false)
+
+# Create label vector (1=true negative, 0=false negative)
+labels <- c(rep(1, length(reviews.true)), rep(0, length(reviews.false)))
+```
+
+```{r preprocess_corpus, include=FALSE}
+# Preprocess the corpus
+reviews.all <- reviews.all %>%
+  # Remove punctuation marks (comma’s, etc.)
+  tm_map(removePunctuation) %>% 
+  # Make all letters lower case
+  tm_map(content_transformer(tolower)) %>% 
+  # Remove English stopwords
+  tm_map(removeWords, stopwords("english")) %>% 
+  # Remove numbers
+  tm_map(removeNumbers) %>% 
+  # Remove excess whitespace
+  tm_map(stripWhitespace)
+```
+
+```{r train_and_test_dtm}
+# 1 fold = 80 samples
+# Fold 1-4 for training = 1:320 from true + 1:320 from false
+index.train <- c(c(1:320), 400+c(1:320))
+
+# Training document-term matrix
+train.dtm <- DocumentTermMatrix(reviews.all[index.train])
+# Test document-term matrix
+test.dtm <- DocumentTermMatrix(reviews.all[-index.train], list(dictionary = dimnames(train.dtm)[[2]]))
+```
+
+## Feature selection
+
+```{r frequency_based_feature_selection}
+# Remove terms that occur in less than 5% of the documents
+# Training document-term matrix
+train.dtm <- removeSparseTerms(train.dtm, 0.95)
+# Test document-term matrix
+test.dtm <- DocumentTermMatrix(reviews.all[-index.train], list(dictionary = dimnames(train.dtm)[[2]]))
+```
+
+```{r mutual_info_feature_selection}
+# Convert document term matrix to binary (term present/absent)
+train.dtm.bin <- as.matrix(train.dtm) > 0
+
+# Compute mutual information of each term with class label
+train.mi <- apply(as.matrix(train.dtm.bin), 
+                  2, 
+                  function(x,y){ mi.plugin(table(x,y)/length(y), unit="log2")},
+                  labels[index.train])
+
+# Sort the indices from high to low mutual information
+train.mi.order <- order(train.mi, decreasing = TRUE)
+
+# Show the top50 terms with highest mutual information
+train.mi[train.mi.order[1:50]]
+
+# Training document-term matrix
+train.dtm.top50 <- train.dtm[, train.mi.order[1:50]]
+# Test document-term matrix
+test.dtm.top50 <- test.dtm[, train.mi.order[1:50]]
+
+# Training document-term matrix
+train.dtm.top100 <- train.dtm[, train.mi.order[1:100]]
+# Test document-term matrix
+test.dtm.top100 <- test.dtm[, train.mi.order[1:100]]
+```
+
+# Classifiers
+
+## Multinomial naive Bayes
+
+```{r classifier_mnb}
+# Train the model with priors and conditional probabilities
+reviews.mnb <- train.mnb(as.matrix(train.dtm), labels[index.train])
+# Make predictions
+reviews.mnb.pred <- predict.mnb(reviews.mnb, as.matrix(test.dtm))
+
+# Confusion matrix
+conf.mat.mnb <- table(labels[-index.train], reviews.mnb.pred, dnn = c("actual", "predicted"))
+
+perf.mnb <-performance(conf.mat.mnb) 
+perf.mnb %>% kable()
+
+# ROC
+roc.mnb <- rocit(score=as.numeric(reviews.mnb.pred), class=labels[-index.train])
+plot(roc.mnb)
+```
+
+```{r classifier_mnb_top50}
+# Train the model with priors and conditional probabilities
+reviews.mnb.top50 <- train.mnb(as.matrix(train.dtm.top50), labels[index.train])
+# Make predictions
+reviews.mnb.top50.pred <- predict.mnb(reviews.mnb.top50, as.matrix(test.dtm.top50))
+
+# Confusion matrix
+conf.mat.mnb.top50 <- table(labels[-index.train], reviews.mnb.top50.pred, dnn = c("actual", "predicted"))
+
+perf.mnb.top50 <-performance(conf.mat.mnb.top50) 
+perf.mnb.top50 %>% kable()
+
+# ROC
+roc.mnb.top50 <- rocit(score=as.numeric(reviews.mnb.top50.pred), class=labels[-index.train])
+plot(roc.mnb.top50)
+```
+
+```{r classifier_mnb_top100}
+# Train the model with priors and conditional probabilities
+reviews.mnb.top100 <- train.mnb(as.matrix(train.dtm.top100), labels[index.train])
+# Make predictions
+reviews.mnb.top100.pred <- predict.mnb(reviews.mnb.top100, as.matrix(test.dtm.top100))
+
+# Confusion matrix
+conf.mat.mnb.top100 <- table(labels[-index.train], reviews.mnb.top100.pred, dnn = c("actual", "predicted"))
+
+perf.mnb.top100 <-performance(conf.mat.mnb.top100) 
+perf.mnb.top100 %>% kable()
+
+# ROC
+roc.mnb.top100 <- rocit(score=as.numeric(reviews.mnb.top100.pred), class=labels[-index.train])
+plot(roc.mnb.top100)
+```
+
+## Regularized logistic regression
+
+```{r logistic_regression}
+# Logistic regression with lasso penalty
+reviews.glmnet <- cv.glmnet(as.matrix(train.dtm), labels[index.train], family="binomial", type.measure="class")
+plot(reviews.glmnet)
+
+# coef(reviews.glmnet, s="lambda.1se")
+
+# Make predictions on the test set
+reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm), s="lambda.1se", type="class")
+
+# Confusion matrix
+conf.mat.logreg <- table(labels[-index.train], reviews.logreg.pred, dnn = c("actual", "predicted"))
+
+perf.logreg <-performance(conf.mat.logreg) 
+perf.logreg %>% kable()
+
+# ROC
+roc.logreg <- rocit(score=as.numeric(reviews.logreg.pred), class=labels[-index.train])
+plot(roc.logreg)
+```
+
+## Classification trees
+
+```{r classifier_rpart}
+# Grow the tree
+reviews.rpart <- rpart(label ~ ., 
+                       data = data.frame(as.matrix(train.dtm), label = labels[index.train]), 
+                       cp = 0,
+                       method = "class")
+
+# Plot cv-error of pruning sequence
+plotcp(reviews.rpart)
+# Tree with lowest cv error
+reviews.rpart.pruned <- prune(reviews.rpart, cp=0.014)
+# Plot the tree
+rpart.plot(reviews.rpart.pruned)
+
+# Make predictions on the test set
+reviews.rpart.pred <- predict(reviews.rpart.pruned,
+                              newdata = data.frame(as.matrix(test.dtm)), 
+                              type = "class")
+
+# Confusion matrix
+conf.mat.rpart <- table(labels[-index.train], reviews.rpart.pred, dnn = c("actual", "predicted"))
+
+perf.rpart <-performance(conf.mat.rpart) 
+perf.rpart %>% kable()
+
+# ROC
+roc.rpart <- rocit(score=as.numeric(reviews.rpart.pred), class=labels[-index.train])
+plot(roc.rpart)
+```
+
+```{r classifier_rpart_top50}
+# Grow the tree
+reviews.rpart.top50 <- rpart(label ~ ., 
+                             data = data.frame(as.matrix(train.dtm.top50), label = labels[index.train]), 
+                             cp = 0,
+                             method = "class")
+
+# Plot cv-error of pruning sequence
+plotcp(reviews.rpart.top50)
+# Tree with lowest cv error
+reviews.rpart.top50.pruned <- prune(reviews.rpart.top50, cp=0.012)
+# Plot the tree
+rpart.plot(reviews.rpart.top50.pruned)
+
+# Make predictions on the test set
+reviews.rpart.top50.pred <- predict(reviews.rpart.top50.pruned,
+                                    newdata = data.frame(as.matrix(test.dtm.top50)), 
+                                    type = "class")
+
+# Confusion matrix
+conf.mat.rpart.top50 <- table(labels[-index.train], reviews.rpart.top50.pred, dnn = c("actual", "predicted"))
+
+perf.rpart.top50 <-performance(conf.mat.rpart.top50) 
+perf.rpart.top50 %>% kable()
+
+# ROC
+roc.rpart.top50 <- rocit(score=as.numeric(reviews.rpart.top50.pred), class=labels[-index.train])
+plot(roc.rpart.top50)
+```
+
+## Random forests
+
+```{r classifier_rf}
+# Train random forest with default settings: 500 trees and mtry = 17
+reviews.rf <- randomForest(as.factor(label) ~ ., 
+                           data = data.frame(as.matrix(train.dtm), label = labels[index.train]))
+# Make predictions
+reviews.rf.pred <- predict(reviews.rf, 
+                           newdata = data.frame(as.matrix(test.dtm), label = labels[-index.train]))
+
+# Confusion matrix
+conf.mat.rf <- table(labels[-index.train], reviews.rf.pred, dnn = c("actual", "predicted"))
+
+perf.rf <-performance(conf.mat.rf) 
+perf.rf %>% kable()
+
+# ROC
+roc.rf <- rocit(score=as.numeric(reviews.rf.pred), class=labels[-index.train])
+plot(roc.rf)
+```
+
+# Hyper-parameters
+
+# Questions
+
+1. For a single classification tree, the impurity reduction is not equal to mutual information?
+2. How to use cross validation for Multinomial naive Bayes or Classification tree, and use out-of-bag evaluation for Random forest?
+3. Bi-gram for Multinomial naive Bayes
+4. 1 for false negative, as deceitful negative comments are of interest -> Read the papers
