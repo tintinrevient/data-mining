@@ -17,7 +17,6 @@ library(glmnet)
 library(rpart)
 library(rpart.plot)
 library(randomForest)
-library(ROCit)
 ```
 
 ```{r basic_functions, include=FALSE}
@@ -108,17 +107,19 @@ performance <- function(confusion_matrix){
 
 ```{r load_reviews, include=FALSE}
 # Read in the data using UTF-8 encoding
-reviews.true <- VCorpus(DirSource(file.path("data", "op_spam_v1.4", "negative_polarity", "truthful_from_Web"), 
-                                      encoding = "UTF-8",
-                                      recursive = TRUE))
 reviews.false <- VCorpus(DirSource(file.path("data", "op_spam_v1.4", "negative_polarity", "deceptive_from_MTurk"), 
                                        encoding = "UTF-8",
                                        recursive = TRUE))
-# Join true and false reviews into a single Corpus
-reviews.all <- c(reviews.true, reviews.false)
+reviews.true <- VCorpus(DirSource(file.path("data", "op_spam_v1.4", "negative_polarity", "truthful_from_Web"), 
+                                      encoding = "UTF-8",
+                                      recursive = TRUE))
 
-# Create label vector (1=true negative, 0=false negative)
-labels <- c(rep(1, length(reviews.true)), rep(0, length(reviews.false)))
+# Join true and false reviews into a single Corpus
+reviews.all <- c(reviews.false, reviews.true)
+
+# Create label vector
+# 1 = deceptive negative, 0 = truthful negative (as deceptive negative is what we are interested in!!!)
+labels <- c(rep(1, length(reviews.false)), rep(0, length(reviews.true)))
 ```
 
 ```{r preprocess_corpus, include=FALSE}
@@ -144,20 +145,46 @@ index.train <- c(c(1:320), 400+c(1:320))
 # Training document-term matrix
 train.dtm <- DocumentTermMatrix(reviews.all[index.train])
 # Test document-term matrix
-test.dtm <- DocumentTermMatrix(reviews.all[-index.train], list(dictionary = dimnames(train.dtm)[[2]]))
+test.dtm <- DocumentTermMatrix(reviews.all[-index.train], 
+                               list(dictionary = dimnames(train.dtm)[[2]]))
+
+# Training document-term matrix for bigrams
+BigramTokenizer <- function (x) {
+  unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+}
+    
+train.dtm.bigram <- DocumentTermMatrix(reviews.all[index.train],
+                                       control = list(tokenize = BigramTokenizer))
+
+# Test document-term matrix for bigrams
+test.dtm.bigram <- DocumentTermMatrix(reviews.all[-index.train], 
+                                      list(dictionary = dimnames(train.dtm.bigram)[[2]]))
 ```
 
 ## Feature selection
 
-```{r frequency_based_feature_selection}
+```{r frequency_based_feature_selection, include=FALSE}
 # Remove terms that occur in less than 5% of the documents
 # Training document-term matrix
 train.dtm <- removeSparseTerms(train.dtm, 0.95)
 # Test document-term matrix
-test.dtm <- DocumentTermMatrix(reviews.all[-index.train], list(dictionary = dimnames(train.dtm)[[2]]))
+test.dtm <- DocumentTermMatrix(reviews.all[-index.train], 
+                               list(dictionary = dimnames(train.dtm)[[2]]))
+
+# Training document-term matrix for bigrams
+train.dtm.bigram <- removeSparseTerms(train.dtm.bigram, 0.99)
+# Test document-term matrix for bigrams
+test.dtm.bigram <- DocumentTermMatrix(reviews.all[-index.train], 
+                                      list(dictionary = dimnames(train.dtm.bigram)[[2]]))
+
+# Combine unigrams and bigrams
+# Training document-term matrix for unigrams and bigrams
+train.dtm.bigram <- cbind(train.dtm, train.dtm.bigram)
+# Test document-term matrix for unigrams and bigrams
+test.dtm.bigram <- cbind(test.dtm, test.dtm.bigram)
 ```
 
-```{r mutual_info_feature_selection}
+```{r mutual_info_feature_selection, include=FALSE}
 # Convert document term matrix to binary (term present/absent)
 train.dtm.bin <- as.matrix(train.dtm) > 0
 
@@ -182,6 +209,26 @@ test.dtm.top50 <- test.dtm[, train.mi.order[1:50]]
 train.dtm.top100 <- train.dtm[, train.mi.order[1:100]]
 # Test document-term matrix
 test.dtm.top100 <- test.dtm[, train.mi.order[1:100]]
+
+# Training document-term matrix
+train.dtm.top150 <- train.dtm[, train.mi.order[1:150]]
+# Test document-term matrix
+test.dtm.top150 <- test.dtm[, train.mi.order[1:150]]
+
+# Training document-term matrix
+train.dtm.top200 <- train.dtm[, train.mi.order[1:200]]
+# Test document-term matrix
+test.dtm.top200 <- test.dtm[, train.mi.order[1:200]]
+
+# Training document-term matrix
+train.dtm.top250 <- train.dtm[, train.mi.order[1:250]]
+# Test document-term matrix
+test.dtm.top250 <- test.dtm[, train.mi.order[1:250]]
+
+# Training document-term matrix
+train.dtm.top300 <- train.dtm[, train.mi.order[1:300]]
+# Test document-term matrix
+test.dtm.top300 <- test.dtm[, train.mi.order[1:300]]
 ```
 
 # Classifiers
@@ -189,77 +236,146 @@ test.dtm.top100 <- test.dtm[, train.mi.order[1:100]]
 ## Multinomial naive Bayes
 
 ```{r classifier_mnb}
-# Train the model with priors and conditional probabilities
-reviews.mnb <- train.mnb(as.matrix(train.dtm), labels[index.train])
-# Make predictions
-reviews.mnb.pred <- predict.mnb(reviews.mnb, as.matrix(test.dtm))
+# 4-fold cross validation
+reviews.mnb.pred <- c()
+reviews.mnb.actual <- c()
+
+# hyper-parameter: feature selection
+# the best option: only mutual information to select top-300 terms out of 6900 total terms
+train.dtm.mnb <- train.dtm
+
+for(i in 1:4) {
+  # Validation fold
+  val.start <- (i - 1) * 80 + 1
+  val.end <- val.start + 80 - 1
+  val.range <- c(c(val.start:val.end), 320+c(val.start:val.end))
+  
+  # Training fold
+  train.range <- c(c(1:320)[-val.range], 320+c(1:320)[-val.range])
+  
+  # Train the model with priors and conditional probabilities
+  reviews.mnb <- train.mnb(as.matrix(train.dtm.mnb)[train.range,], labels[index.train][train.range])
+  # Make predictions
+  reviews.mnb.pred <- c(reviews.mnb.pred, predict.mnb(reviews.mnb, as.matrix(train.dtm.mnb)[val.range,]))
+  reviews.mnb.actual <- c(reviews.mnb.actual, labels[index.train][val.range])
+}
 
 # Confusion matrix
-conf.mat.mnb <- table(labels[-index.train], reviews.mnb.pred, dnn = c("actual", "predicted"))
-
+conf.mat.mnb <- table(reviews.mnb.actual, reviews.mnb.pred, dnn = c("actual", "predicted"))
 perf.mnb <-performance(conf.mat.mnb) 
+
 perf.mnb %>% kable()
-
-# ROC
-roc.mnb <- rocit(score=as.numeric(reviews.mnb.pred), class=labels[-index.train])
-plot(roc.mnb)
 ```
 
-```{r classifier_mnb_top50}
+```{r classifier_mnb_test_performance, include=FALSE}
+# Final training set and test set
+train.dtm.mnb <- train.dtm.top300
+test.dtm.mnb <- test.dtm.top300
+
 # Train the model with priors and conditional probabilities
-reviews.mnb.top50 <- train.mnb(as.matrix(train.dtm.top50), labels[index.train])
+reviews.mnb.test <- train.mnb(as.matrix(train.dtm.mnb), labels[index.train])
 # Make predictions
-reviews.mnb.top50.pred <- predict.mnb(reviews.mnb.top50, as.matrix(test.dtm.top50))
+reviews.mnb.test.pred <- predict.mnb(reviews.mnb.test, as.matrix(test.dtm.mnb))
 
 # Confusion matrix
-conf.mat.mnb.top50 <- table(labels[-index.train], reviews.mnb.top50.pred, dnn = c("actual", "predicted"))
+conf.mat.mnb.test <- table(labels[-index.train], reviews.mnb.test.pred, dnn = c("actual", "predicted"))
 
-perf.mnb.top50 <-performance(conf.mat.mnb.top50) 
-perf.mnb.top50 %>% kable()
-
-# ROC
-roc.mnb.top50 <- rocit(score=as.numeric(reviews.mnb.top50.pred), class=labels[-index.train])
-plot(roc.mnb.top50)
+perf.mnb.test <-performance(conf.mat.mnb.test) 
+perf.mnb.test %>% kable()
 ```
 
-```{r classifier_mnb_top100}
-# Train the model with priors and conditional probabilities
-reviews.mnb.top100 <- train.mnb(as.matrix(train.dtm.top100), labels[index.train])
-# Make predictions
-reviews.mnb.top100.pred <- predict.mnb(reviews.mnb.top100, as.matrix(test.dtm.top100))
+```{r classifier_mnb_with_bigram}
+# 4-fold cross validation
+reviews.mnb.pred <- c()
+reviews.mnb.actual <- c()
+
+# hyper-parameter: feature selection
+# the best option: only mutual information to select top-300 terms out of 6900 total terms
+train.dtm.mnb <- train.dtm.bigram
+
+for(i in 1:4) {
+  # Validation fold
+  val.start <- (i - 1) * 80 + 1
+  val.end <- val.start + 80 - 1
+  val.range <- c(c(val.start:val.end), 320+c(val.start:val.end))
+  
+  # Training fold
+  train.range <- c(c(1:320)[-val.range], 320+c(1:320)[-val.range])
+  
+  # Train the model with priors and conditional probabilities
+  reviews.mnb <- train.mnb(as.matrix(train.dtm.mnb)[train.range,], labels[index.train][train.range])
+  # Make predictions
+  reviews.mnb.pred <- c(reviews.mnb.pred, predict.mnb(reviews.mnb, as.matrix(train.dtm.mnb)[val.range,]))
+  reviews.mnb.actual <- c(reviews.mnb.actual, labels[index.train][val.range])
+}
 
 # Confusion matrix
-conf.mat.mnb.top100 <- table(labels[-index.train], reviews.mnb.top100.pred, dnn = c("actual", "predicted"))
+conf.mat.mnb <- table(reviews.mnb.actual, reviews.mnb.pred, dnn = c("actual", "predicted"))
+perf.mnb <-performance(conf.mat.mnb) 
 
-perf.mnb.top100 <-performance(conf.mat.mnb.top100) 
-perf.mnb.top100 %>% kable()
-
-# ROC
-roc.mnb.top100 <- rocit(score=as.numeric(reviews.mnb.top100.pred), class=labels[-index.train])
-plot(roc.mnb.top100)
+perf.mnb %>% kable()
 ```
 
 ## Regularized logistic regression
 
 ```{r logistic_regression}
 # Logistic regression with lasso penalty
-reviews.glmnet <- cv.glmnet(as.matrix(train.dtm), labels[index.train], family="binomial", type.measure="class")
+reviews.glmnet <- cv.glmnet(as.matrix(train.dtm), labels[index.train], 
+                            family="binomial", type.measure="class")
+# Cross-validation on lambda
 plot(reviews.glmnet)
 
 # coef(reviews.glmnet, s="lambda.1se")
 
 # Make predictions on the test set
-reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm), s="lambda.1se", type="class")
+reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm), 
+                               s="lambda.1se", type="class")
 
 # Confusion matrix
 conf.mat.logreg <- table(labels[-index.train], reviews.logreg.pred, dnn = c("actual", "predicted"))
 
 perf.logreg <-performance(conf.mat.logreg) 
 perf.logreg %>% kable()
+```
 
-# ROC
-roc.logreg <- rocit(score=as.numeric(reviews.logreg.pred), class=labels[-index.train])
-plot(roc.logreg)
+```{r logistic_regression_with_bigram}
+# Logistic regression with lasso penalty
+reviews.glmnet.bigram <- cv.glmnet(as.matrix(train.dtm.bigram), labels[index.train], 
+                                   family="binomial", type.measure="class")
+# Cross-validation on lambda
+plot(reviews.glmnet.bigram)
+
+# coef(reviews.glmnet.bigram, s="lambda.1se")
+
+# Make predictions on the test set
+reviews.logreg.bigram.pred <- predict(reviews.glmnet.bigram, newx=as.matrix(test.dtm.bigram), 
+                                      s="lambda.1se", type="class")
+
+# Confusion matrix
+conf.mat.logreg.bigram <- table(labels[-index.train], reviews.logreg.bigram.pred, dnn = c("actual", "predicted"))
+
+perf.logreg.bigram <-performance(conf.mat.logreg.bigram) 
+perf.logreg.bigram %>% kable()
+```
+
+```{r logistic_regression_top50, include=FALSE}
+# Logistic regression with lasso penalty
+reviews.glmnet.top50 <- cv.glmnet(as.matrix(train.dtm.top50), labels[index.train], 
+                                  family="binomial", type.measure="class")
+# Cross-validation on lambda
+plot(reviews.glmnet.top50)
+
+# coef(reviews.glmnet.top50, s="lambda.1se")
+
+# Make predictions on the test set
+reviews.logreg.top50.pred <- predict(reviews.glmnet.top50, newx=as.matrix(test.dtm.top50), 
+                                     s="lambda.1se", type="class")
+
+# Confusion matrix
+conf.mat.logreg.top50 <- table(labels[-index.train], reviews.logreg.top50.pred, dnn = c("actual", "predicted"))
+
+perf.logreg.top50 <-performance(conf.mat.logreg.top50) 
+perf.logreg.top50 %>% kable()
 ```
 
 ## Classification trees
@@ -288,13 +404,9 @@ conf.mat.rpart <- table(labels[-index.train], reviews.rpart.pred, dnn = c("actua
 
 perf.rpart <-performance(conf.mat.rpart) 
 perf.rpart %>% kable()
-
-# ROC
-roc.rpart <- rocit(score=as.numeric(reviews.rpart.pred), class=labels[-index.train])
-plot(roc.rpart)
 ```
 
-```{r classifier_rpart_top50}
+```{r classifier_rpart_top50, include=FALSE}
 # Grow the tree
 reviews.rpart.top50 <- rpart(label ~ ., 
                              data = data.frame(as.matrix(train.dtm.top50), label = labels[index.train]), 
@@ -318,10 +430,6 @@ conf.mat.rpart.top50 <- table(labels[-index.train], reviews.rpart.top50.pred, dn
 
 perf.rpart.top50 <-performance(conf.mat.rpart.top50) 
 perf.rpart.top50 %>% kable()
-
-# ROC
-roc.rpart.top50 <- rocit(score=as.numeric(reviews.rpart.top50.pred), class=labels[-index.train])
-plot(roc.rpart.top50)
 ```
 
 ## Random forests
@@ -339,10 +447,6 @@ conf.mat.rf <- table(labels[-index.train], reviews.rf.pred, dnn = c("actual", "p
 
 perf.rf <-performance(conf.mat.rf) 
 perf.rf %>% kable()
-
-# ROC
-roc.rf <- rocit(score=as.numeric(reviews.rf.pred), class=labels[-index.train])
-plot(roc.rf)
 ```
 
 # Hyper-parameters
@@ -350,6 +454,5 @@ plot(roc.rf)
 # Questions
 
 1. For a single classification tree, the impurity reduction is not equal to mutual information?
-2. How to use cross validation for Multinomial naive Bayes or Classification tree, and use out-of-bag evaluation for Random forest?
-3. Bi-gram for Multinomial naive Bayes
-4. 1 for false negative, as deceitful negative comments are of interest -> Read the papers
+2. the words found in feature selection (e.g. frequqency or mutual information) = the words found in classification tree by impurity reduction = the words found in logistic regression by coef(s="lambda.1se") (e.g. as.matrix(coef(reviews.glmnet, s="lambda.1se"))[,1]['chicago'])? 
+3. sum(as.matrix(coef(reviews.glmnet, s="lambda.1se")) != 0) is 52, so top50 is better?
