@@ -15,6 +15,7 @@ library(glmnet)
 library(randomForest)
 library(SnowballC)
 library(broom)
+library(NLP)
 
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -51,7 +52,7 @@ file_names <-
 
 for (name in file_names)
   df <- bind_rows(df,
-    list(label = as.numeric(str_detect(name, "truthful")), # 0 for deceptive and 1 for truthful
+    list(label = as.numeric(str_detect(name, "deceptive")), # 1 for deceptive and 0 for truthful
       fold = as.numeric(str_extract(name, pattern = regex('\\d'))),
       hotel = str_extract(name, pattern = regex('[a-z]*_\\d+')),
       review = read_file(str_c("negative_polarity/", name))
@@ -83,15 +84,38 @@ corpus <- VCorpus(VectorSource(df[["review"]])) %>%
 
 ## Get word frequency matrix
 
-```{r frequency}
+### Unigrams
 
-dtm <- DocumentTermMatrix(corpus) %>%
-  removeSparseTerms(., sparse = 0.7) # those terms from x are removed which have at least a 70
+```{r unigram}
+
+length(corpus)
+
+dtm <- DocumentTermMatrix(corpus)  %>%
+  removeSparseTerms(., sparse = 0.95) # those terms from x are removed which have at least a 70
 # percent of empty (i.e., terms occurring 0 times in a document) elements. I.e., the resulting
 # matrix contains only terms with a sparse factor of less than 70 percent
 
+dim(dtm)
 
 inspect(dtm)
+
+
+```
+
+### Bigrams
+
+```{r bigram}
+
+BigramTokenizer <-
+  function(x)
+    unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+
+dtm2 <- DocumentTermMatrix(corpus, control = list(tokenize = BigramTokenizer))  %>%
+  removeSparseTerms(., sparse = 0.99)
+
+dim(dtm2)
+
+inspect(dtm2)
 
 ```
 
@@ -99,7 +123,7 @@ inspect(dtm)
 
 ```{r labels}
 
-labels <- df[["label"]]
+labels <- as.factor(df[["label"]])
 
 labels[c(1:10, 790:800)]
 
@@ -107,7 +131,11 @@ labels[c(1:10, 790:800)]
 
 ## Random split in train and test data
 
-```{r train_test_split}
+### Unigrams
+
+```{r train_test_split_uni}
+
+set.seed(123)
 
 train_ind <- sample(1:nrow(df), size = nrow(df)*0.75)
 
@@ -117,6 +145,18 @@ train_labels <- labels[train_ind]
 test_dtm <- as.matrix(dtm)[-train_ind,]
 test_labels <- labels[-train_ind]
 
+
+```
+
+### Bigrams
+
+```{r train_test_split_bi}
+
+train_dtm2 <- as.matrix(dtm2)[train_ind,]
+train_labels <- labels[train_ind]
+
+test_dtm2 <- as.matrix(dtm2)[-train_ind,]
+test_labels <- labels[-train_ind]
 
 ```
 
@@ -176,7 +216,7 @@ predict.mnb <- function (model, dtm) {
 
 mnb_model <- train.mnb(train_dtm, train_labels)
 
-mnb_model
+mnb_model$cond.prob %>% head(10) %>% kable()
 
 ```
 
@@ -256,7 +296,11 @@ perf_mnb %>% kable()
 
 # 2. Regularised logistic regression (discriminative linear classifier)
 
-## Choose lambda
+A logistic regeression model uses the information from the document term matrix to predict the class (either '1' for deceptive or '0' for truthful). For each  
+
+## Unigram
+
+### Choose lambda
 
 ```{r cv_lasso}
 
@@ -269,19 +313,28 @@ cv_lasso <- cv.glmnet(train_dtm, train_labels, alpha = 1, family = "binomial")
 
 plot(cv_lasso)
 
+coefs <- as.data.frame(as.matrix(coef(cv_lasso, s="lambda.1se"))) %>%
+  rownames_to_column(var = "term") %>%
+  rename(coefficient = `1`) %>%
+  filter(coefficient != 0)
+
+coefs %>% head(10) %>% kable()
+
+sqrt(diag(vcov(model_glm)))
+
+
 ```
 
-## Train
+### Train
 
 ```{r train_glm}
 
 model_glm <- glmnet(train_dtm, train_labels, alpha = 1, family = "binomial", 
                     lambda = cv_lasso$lambda.1se) # I choose the largest lambda within 1se from the smallest lambda
 
-
 ```
 
-## Predict
+### Predict
 
 ```{r predict_glm}
 
@@ -296,7 +349,7 @@ predicted_glm <- ifelse(probabilities_glm > 0.5, 1, 0)
 
 ```
 
-## Confusion matrix
+### Confusion matrix
 
 ```{r confusion_glm}
 
@@ -307,7 +360,7 @@ conf_glm
 ```
 
 
-## Performance metrics
+### Performance metrics
 
 ```{r performance_glm}
 
@@ -316,6 +369,77 @@ perf_glm <- performance(conf_glm)
 perf_glm %>% kable()
 
 ```
+
+## Bigram
+
+### Choose lambda
+
+```{r cv_lasso2}
+
+# Use LASSO (penalising for number of parameters)
+# Determine lambda by means of cross validation
+
+set.seed(1)
+
+cv_lasso <- cv.glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial")
+
+plot(cv_lasso)
+
+coefs <- as.data.frame(as.matrix(coef(cv_lasso, s="lambda.1se"))) %>%
+  rownames_to_column(var = "term") %>%
+  rename(coefficient = `1`) %>%
+  filter(coefficient != 0)
+
+coefs %>% head(10) %>% kable()
+
+```
+
+### Train
+
+```{r train_glm2}
+
+model_glm <- glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial", 
+                    lambda = cv_lasso$lambda.1se) # I choose the largest lambda within 1se from the smallest lambda
+
+
+```
+
+### Predict
+
+```{r predict_glm2}
+
+#test_dtm_glm <- model.matrix(test_labels ~ test_dtm)[,-1]
+
+probabilities_glm <- predict(model_glm, 
+                             newx = test_dtm2, 
+                             type = "response", # Type "response" gives the fitted probabilities for "binomial"
+                             s= cv_lasso$lambda.1se)
+
+predicted_glm <- ifelse(probabilities_glm > 0.5, 1, 0)
+
+```
+
+### Confusion matrix
+
+```{r confusion_glm2}
+
+conf_glm <- table(test_labels, predicted_glm)
+
+conf_glm
+
+```
+
+
+### Performance metrics
+
+```{r performance_glm2}
+
+perf_glm2 <- performance(conf_glm)
+
+perf_glm2 %>% kable()
+
+```
+
 
 # 3. Classification trees (flexible classifier)
 
@@ -332,9 +456,7 @@ model_tree <- randomForest(x = train_dtm, y = train_labels, ntree = 1, mtry = nc
 
 ```{r predict_tree}
 
-probabilities_tree <- predict(model_tree, test_dtm, type = "response")
-
-predicted_tree <- ifelse(probabilities_tree > 0.5, 1, 0)
+predicted_tree <- predict(model_tree, test_dtm, type = "response")
 
 ```
 
@@ -373,9 +495,7 @@ model_random <- randomForest(x = train_dtm, y = train_labels, ntree = 10, mtry =
 
 ```{r predict_random}
 
-probabilities_random <- predict(model_random, test_dtm, type = "response")
-
-predicted_random <- ifelse(probabilities_random > 0.5, 1, 0)
+predicted_random <- predict(model_random, test_dtm, type = "response")
 
 ```
 
@@ -408,6 +528,7 @@ perf_random %>% kable()
 perf_compare <- tibble(metric = perf_mnb[["metric"]],
                        mnb = perf_mnb[["value"]],
                        glm = perf_glm[["value"]],
+                       glm2 = perf_glm2[["value"]],
                        tree = perf_tree[["value"]],
                        random = perf_random[["value"]])
 
