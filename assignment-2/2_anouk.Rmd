@@ -330,17 +330,9 @@ perf_glm %>% kable()
 #printcp(model_tree_test)
 
 mtry_value = (ncol(train_dtm))
-
-#hieronder volgen een aantal probeersels
-#training_classes <- train_dtm[0,]#rijtje van alle features
-#print(training_classes)
-#fmla <- as.formula(training_classes~.)
-#train_dtm$training_classes <- as.character(train_dtm$classes)
-#train_dtm$training_classes <- as.factor(train_dtm$training_classes)
+#change the training labels to factors in order to use the function as a classification and not as a regression
 train_labels <-as.factor(train_labels)
 
-
-#bank_churn$Exited= as.factor(bank_churn$Exited)
 
 model_tree <- randomForest( x = train_dtm, y = train_labels, ntree = 1, mtry = mtry_value )
 
@@ -350,9 +342,11 @@ model_tree <- randomForest( x = train_dtm, y = train_labels, ntree = 1, mtry = m
 
 ```{r predict_tree}
 
-probabilities_tree <- predict(model_tree, test_dtm, type = "response")
+#dit was eerst probabilities tree
+predicted_tree <- predict(model_tree, test_dtm, type = "response")
 
-predicted_tree <- ifelse(probabilities_tree > 0.5, 1, 0)
+#remove the extra function since no regression was performed
+#predicted_tree <- ifelse(probabilities_tree > 0.5, 1, 0)
 
 ```
 
@@ -381,24 +375,52 @@ perf_tree %>% kable()
 
 ```{r train_random}
 
-# TO DO: cross validate for mtry & ntree (caret package)
+# TO DO: cross validate for mtry & treesize
 
-#model_random_start <- randomForest(x = train_dtm, y = train_labels, ntree = 10, mtry = 5)
-ntreeTry = 50
-stepFactor = 2
-improve = 0.05
-mtry = sqrt(length(train_dtm))
-model_random <- tuneRF (x = train_dtm, y = train_labels, mtry, ntreeTry, stepFactor, improve, trace = TRUE, plot = TRUE, doBest = TRUE)
+#check that the labels are regarded as factors. This way classificition is used instead of the regression funcitonality
+train_labels <-as.factor(train_labels)
+
+#set the parameters for the tune RF function
+#TODO: tune these variables
+
+#this should be high enough, it takes up quite some computational power. After tuning: test if it can be lower.
+ntreeTry = 1500
+
+#choose stepFactor 1.4: the lowest value with more than 1 result (most fine-grained search)
+#???? what about 77?
+
+#create a matrix to optimize the stepfactor and improve values
+tune_matrix <- matrix(0, nrow = 10, ncol = 10)
+
+#loop through the ranges of both values
+for (i in 1: 10)
+  for(j in 0.0005 : 0.05)
+    #stepFactor = 1.4
+    stepFactor = i
+    #improve = 0.0005
+    improve = j
+
+    #perform the tuneRF function to find the optimal mtry
+    model_random <- tuneRF (x = train_dtm, y = train_labels, ntreeTry = ntreeTry, stepFactor = stepFactor, improve= improve, trace = TRUE, plot = TRUE, doBest = TRUE)
+    
+    
+    #add the lowest OOB score to the matrix
+    #find out how to do this
+    #tune_matrix[i,j] = min(trace())
+    
+    
+
+#TO DO: tune the treesize for optimal results
 
 ```
 
 ## Predict
 
 ```{r predict_random}
+#dit was probabilities_random
+predicted_random <- predict(model_random, test_dtm, type = "response")
 
-probabilities_random <- predict(model_random, test_dtm, type = "response")
-
-predicted_random <- ifelse(probabilities_random > 0.5, 1, 0)
+#predicted_random <- ifelse(probabilities_random > 0.5, 1, 0)
 
 ```
 
