@@ -54,6 +54,27 @@ predict.mnb <- function (model,dtm) {
   classlabels[max.col(logprobs)]
 }
 
+# return top-n high mutual-information terms' index
+calculate.topn <- function(dtm, topn) {
+  # Convert document term matrix to binary (term present/absent)
+  dtm.bin <- as.matrix(dtm) > 0
+  
+  # Compute mutual information of each term with class label
+  mi <- apply(as.matrix(dtm.bin),
+              2, 
+              function(x,y){ mi.plugin(table(x,y)/length(y), unit="log2")},
+              labels[index.train])
+  
+  # Sort the indices from high to low mutual information
+  mi.order <- order(mi, decreasing = TRUE)
+  
+  # Show top-n mutual-information terms
+  mi[mi.order[topn]]
+  
+  # Return top-n mutual-information terms' index
+  return(mi.order[topn])
+}
+
 # performance metrics
 performance <- function(confusion_matrix){
   tn <- confusion_matrix[1,1]
@@ -163,72 +184,38 @@ test.dtm.bigram <- DocumentTermMatrix(reviews.all[-index.train],
 
 ## Feature selection
 
-```{r frequency_based_feature_selection, include=FALSE}
+```{r frequency_based_feature_selection}
 # Remove terms that occur in less than 5% of the documents
 # Training document-term matrix
-train.dtm <- removeSparseTerms(train.dtm, 0.95)
+train.dtm.freq <- removeSparseTerms(train.dtm, 0.95)
 # Test document-term matrix
-test.dtm <- DocumentTermMatrix(reviews.all[-index.train], 
-                               list(dictionary = dimnames(train.dtm)[[2]]))
+test.dtm.freq <- DocumentTermMatrix(reviews.all[-index.train], 
+                                    list(dictionary = dimnames(train.dtm.freq)[[2]]))
 
 # Training document-term matrix for bigrams
-train.dtm.bigram <- removeSparseTerms(train.dtm.bigram, 0.99)
+train.dtm.bigram.freq <- removeSparseTerms(train.dtm.bigram, 0.99)
 # Test document-term matrix for bigrams
-test.dtm.bigram <- DocumentTermMatrix(reviews.all[-index.train], 
-                                      list(dictionary = dimnames(train.dtm.bigram)[[2]]))
+test.dtm.bigram.freq <- DocumentTermMatrix(reviews.all[-index.train], 
+                                           list(dictionary = dimnames(train.dtm.bigram.freq)[[2]]))
 
 # Combine unigrams and bigrams
 # Training document-term matrix for unigrams and bigrams
-train.dtm.bigram <- cbind(train.dtm, train.dtm.bigram)
+train.dtm.bigram.freq <- cbind(train.dtm.freq, train.dtm.bigram.freq)
 # Test document-term matrix for unigrams and bigrams
-test.dtm.bigram <- cbind(test.dtm, test.dtm.bigram)
+test.dtm.bigram.freq <- cbind(test.dtm.freq, test.dtm.bigram.freq)
 ```
 
-```{r mutual_info_feature_selection, include=FALSE}
-# Convert document term matrix to binary (term present/absent)
-train.dtm.bin <- as.matrix(train.dtm) > 0
+```{r mutual_info_feature_selection}
 
-# Compute mutual information of each term with class label
-train.mi <- apply(as.matrix(train.dtm.bin), 
-                  2, 
-                  function(x,y){ mi.plugin(table(x,y)/length(y), unit="log2")},
-                  labels[index.train])
+# Select top-n mutual-information terms from total vocabularies
+index.top300 <- calculate.topn(train.dtm, topn = c(1:300))
+train.dtm.top300 <- train.dtm[, index.top300]
+test.dtm.top300 <- test.dtm[, index.top300]
 
-# Sort the indices from high to low mutual information
-train.mi.order <- order(train.mi, decreasing = TRUE)
-
-# Show the top50 terms with highest mutual information
-train.mi[train.mi.order[1:50]]
-
-# Training document-term matrix
-train.dtm.top50 <- train.dtm[, train.mi.order[1:50]]
-# Test document-term matrix
-test.dtm.top50 <- test.dtm[, train.mi.order[1:50]]
-
-# Training document-term matrix
-train.dtm.top100 <- train.dtm[, train.mi.order[1:100]]
-# Test document-term matrix
-test.dtm.top100 <- test.dtm[, train.mi.order[1:100]]
-
-# Training document-term matrix
-train.dtm.top150 <- train.dtm[, train.mi.order[1:150]]
-# Test document-term matrix
-test.dtm.top150 <- test.dtm[, train.mi.order[1:150]]
-
-# Training document-term matrix
-train.dtm.top200 <- train.dtm[, train.mi.order[1:200]]
-# Test document-term matrix
-test.dtm.top200 <- test.dtm[, train.mi.order[1:200]]
-
-# Training document-term matrix
-train.dtm.top250 <- train.dtm[, train.mi.order[1:250]]
-# Test document-term matrix
-test.dtm.top250 <- test.dtm[, train.mi.order[1:250]]
-
-# Training document-term matrix
-train.dtm.top300 <- train.dtm[, train.mi.order[1:300]]
-# Test document-term matrix
-test.dtm.top300 <- test.dtm[, train.mi.order[1:300]]
+# Select top-n mutual-information terms from frequent terms
+index.freq.top200 <- calculate.topn(train.dtm.freq, topn = c(1:200))
+train.dtm.freq.top200 <- train.dtm[, index.freq.top200]
+test.dtm.freq.top200 <- test.dtm[, index.freq.top200]
 ```
 
 # Classifiers
@@ -242,7 +229,7 @@ reviews.mnb.actual <- c()
 
 # hyper-parameter: feature selection
 # the best option: only mutual information to select top-300 terms out of 6900 total terms
-train.dtm.mnb <- train.dtm
+train.dtm.mnb <- train.dtm.top300
 
 for(i in 1:4) {
   # Validation fold
@@ -286,12 +273,12 @@ perf.mnb.test %>% kable()
 
 ```{r classifier_mnb_with_bigram}
 # 4-fold cross validation
-reviews.mnb.pred <- c()
-reviews.mnb.actual <- c()
+reviews.mnb.bigram.pred <- c()
+reviews.mnb.bigram.actual <- c()
 
 # hyper-parameter: feature selection
 # the best option: only mutual information to select top-300 terms out of 6900 total terms
-train.dtm.mnb <- train.dtm.bigram
+train.dtm.mnb.bigram <- train.dtm.bigram.freq
 
 for(i in 1:4) {
   # Validation fold
@@ -303,24 +290,31 @@ for(i in 1:4) {
   train.range <- c(c(1:320)[-val.range], 320+c(1:320)[-val.range])
   
   # Train the model with priors and conditional probabilities
-  reviews.mnb <- train.mnb(as.matrix(train.dtm.mnb)[train.range,], labels[index.train][train.range])
+  reviews.mnb <- train.mnb(as.matrix(train.dtm.mnb.bigram)[train.range,], labels[index.train][train.range])
   # Make predictions
-  reviews.mnb.pred <- c(reviews.mnb.pred, predict.mnb(reviews.mnb, as.matrix(train.dtm.mnb)[val.range,]))
-  reviews.mnb.actual <- c(reviews.mnb.actual, labels[index.train][val.range])
+  reviews.mnb.bigram.pred <- c(reviews.mnb.bigram.pred, 
+                               predict.mnb(reviews.mnb, as.matrix(train.dtm.mnb.bigram)[val.range,]))
+  reviews.mnb.bigram.actual <- c(reviews.mnb.bigram.actual, labels[index.train][val.range])
 }
 
 # Confusion matrix
-conf.mat.mnb <- table(reviews.mnb.actual, reviews.mnb.pred, dnn = c("actual", "predicted"))
-perf.mnb <-performance(conf.mat.mnb) 
+conf.mat.mnb.bigram <- table(reviews.mnb.bigram.actual, reviews.mnb.bigram.pred, 
+                             dnn = c("actual", "predicted"))
+perf.mnb.bigram <-performance(conf.mat.mnb.bigram) 
 
-perf.mnb %>% kable()
+perf.mnb.bigram %>% kable()
 ```
 
 ## Regularized logistic regression
 
 ```{r logistic_regression}
+# hyper-parameter: feature selection
+# the best option: ???
+train.dtm.glmet <- train.dtm.freq
+test.dtm.glmet <- test.dtm.freq
+
 # Logistic regression with lasso penalty
-reviews.glmnet <- cv.glmnet(as.matrix(train.dtm), labels[index.train], 
+reviews.glmnet <- cv.glmnet(as.matrix(train.dtm.glmet), labels[index.train], 
                             family="binomial", type.measure="class")
 # Cross-validation on lambda
 plot(reviews.glmnet)
@@ -328,7 +322,7 @@ plot(reviews.glmnet)
 # coef(reviews.glmnet, s="lambda.1se")
 
 # Make predictions on the test set
-reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm), 
+reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm.glmet), 
                                s="lambda.1se", type="class")
 
 # Confusion matrix
@@ -339,8 +333,13 @@ perf.logreg %>% kable()
 ```
 
 ```{r logistic_regression_with_bigram}
+# hyper-parameter: feature selection
+# the best option: ???
+train.dtm.glmet.bigram <- train.dtm.bigram.freq
+test.dtm.glmet.bigram <- test.dtm.bigram.freq
+
 # Logistic regression with lasso penalty
-reviews.glmnet.bigram <- cv.glmnet(as.matrix(train.dtm.bigram), labels[index.train], 
+reviews.glmnet.bigram <- cv.glmnet(as.matrix(train.dtm.glmet.bigram), labels[index.train], 
                                    family="binomial", type.measure="class")
 # Cross-validation on lambda
 plot(reviews.glmnet.bigram)
@@ -348,42 +347,28 @@ plot(reviews.glmnet.bigram)
 # coef(reviews.glmnet.bigram, s="lambda.1se")
 
 # Make predictions on the test set
-reviews.logreg.bigram.pred <- predict(reviews.glmnet.bigram, newx=as.matrix(test.dtm.bigram), 
+reviews.logreg.bigram.pred <- predict(reviews.glmnet.bigram, newx=as.matrix(test.dtm.glmet.bigram), 
                                       s="lambda.1se", type="class")
 
 # Confusion matrix
-conf.mat.logreg.bigram <- table(labels[-index.train], reviews.logreg.bigram.pred, dnn = c("actual", "predicted"))
+conf.mat.logreg.bigram <- table(labels[-index.train], reviews.logreg.bigram.pred, 
+                                dnn = c("actual", "predicted"))
 
 perf.logreg.bigram <-performance(conf.mat.logreg.bigram) 
 perf.logreg.bigram %>% kable()
 ```
 
-```{r logistic_regression_top50, include=FALSE}
-# Logistic regression with lasso penalty
-reviews.glmnet.top50 <- cv.glmnet(as.matrix(train.dtm.top50), labels[index.train], 
-                                  family="binomial", type.measure="class")
-# Cross-validation on lambda
-plot(reviews.glmnet.top50)
-
-# coef(reviews.glmnet.top50, s="lambda.1se")
-
-# Make predictions on the test set
-reviews.logreg.top50.pred <- predict(reviews.glmnet.top50, newx=as.matrix(test.dtm.top50), 
-                                     s="lambda.1se", type="class")
-
-# Confusion matrix
-conf.mat.logreg.top50 <- table(labels[-index.train], reviews.logreg.top50.pred, dnn = c("actual", "predicted"))
-
-perf.logreg.top50 <-performance(conf.mat.logreg.top50) 
-perf.logreg.top50 %>% kable()
-```
-
 ## Classification trees
 
 ```{r classifier_rpart}
+# hyper-parameter: feature selection
+# the best option: ???
+train.dtm.rpart <- train.dtm.freq
+test.dtm.rpart <- test.dtm.freq
+
 # Grow the tree
 reviews.rpart <- rpart(label ~ ., 
-                       data = data.frame(as.matrix(train.dtm), label = labels[index.train]), 
+                       data = data.frame(as.matrix(train.dtm.rpart), label = labels[index.train]), 
                        cp = 0,
                        method = "class")
 
@@ -396,7 +381,7 @@ rpart.plot(reviews.rpart.pruned)
 
 # Make predictions on the test set
 reviews.rpart.pred <- predict(reviews.rpart.pruned,
-                              newdata = data.frame(as.matrix(test.dtm)), 
+                              newdata = data.frame(as.matrix(test.dtm.rpart)), 
                               type = "class")
 
 # Confusion matrix
@@ -406,47 +391,80 @@ perf.rpart <-performance(conf.mat.rpart)
 perf.rpart %>% kable()
 ```
 
-```{r classifier_rpart_top50, include=FALSE}
+```{r classifier_rpart_bigram}
+# hyper-parameter: feature selection
+# the best option: ???
+train.dtm.rpart.bigram <- train.dtm.bigram.freq
+test.dtm.rpart.bigram <- test.dtm.bigram.freq
+
 # Grow the tree
-reviews.rpart.top50 <- rpart(label ~ ., 
-                             data = data.frame(as.matrix(train.dtm.top50), label = labels[index.train]), 
-                             cp = 0,
-                             method = "class")
+reviews.rpart.bigram <- rpart(label ~ ., 
+                              data = data.frame(as.matrix(train.dtm.rpart.bigram), 
+                                                label = labels[index.train]), 
+                              cp = 0, method = "class")
 
 # Plot cv-error of pruning sequence
-plotcp(reviews.rpart.top50)
+plotcp(reviews.rpart.bigram)
 # Tree with lowest cv error
-reviews.rpart.top50.pruned <- prune(reviews.rpart.top50, cp=0.012)
+reviews.rpart.bigram.pruned <- prune(reviews.rpart.bigram, cp=0.014)
 # Plot the tree
-rpart.plot(reviews.rpart.top50.pruned)
+rpart.plot(reviews.rpart.bigram.pruned)
 
 # Make predictions on the test set
-reviews.rpart.top50.pred <- predict(reviews.rpart.top50.pruned,
-                                    newdata = data.frame(as.matrix(test.dtm.top50)), 
-                                    type = "class")
+reviews.rpart.bigram.pred <- predict(reviews.rpart.bigram.pruned,
+                                     newdata = data.frame(as.matrix(test.dtm.rpart.bigram)), 
+                                     type = "class")
 
 # Confusion matrix
-conf.mat.rpart.top50 <- table(labels[-index.train], reviews.rpart.top50.pred, dnn = c("actual", "predicted"))
+conf.mat.rpart.bigram <- table(labels[-index.train], reviews.rpart.bigram.pred, 
+                               dnn = c("actual", "predicted"))
 
-perf.rpart.top50 <-performance(conf.mat.rpart.top50) 
-perf.rpart.top50 %>% kable()
+perf.rpart.bigram <-performance(conf.mat.rpart.bigram) 
+perf.rpart.bigram %>% kable()
 ```
 
 ## Random forests
 
 ```{r classifier_rf}
+# hyper-parameter: feature selection
+# the best option: ???
+train.dtm.rf <- train.dtm.freq
+test.dtm.rf <- test.dtm.freq
+
 # Train random forest with default settings: 500 trees and mtry = 17
 reviews.rf <- randomForest(as.factor(label) ~ ., 
-                           data = data.frame(as.matrix(train.dtm), label = labels[index.train]))
+                           data = data.frame(as.matrix(train.dtm.rf), label = labels[index.train]))
 # Make predictions
 reviews.rf.pred <- predict(reviews.rf, 
-                           newdata = data.frame(as.matrix(test.dtm), label = labels[-index.train]))
+                           newdata = data.frame(as.matrix(test.dtm.rf), label = labels[-index.train]))
 
 # Confusion matrix
 conf.mat.rf <- table(labels[-index.train], reviews.rf.pred, dnn = c("actual", "predicted"))
 
 perf.rf <-performance(conf.mat.rf) 
 perf.rf %>% kable()
+```
+
+```{r classifier_rf_bigram}
+# hyper-parameter: feature selection
+# the best option: ???
+train.dtm.rf.bigram <- train.dtm.bigram.freq
+test.dtm.rf.bigram <- test.dtm.bigram.freq
+
+# Train random forest with default settings: 500 trees and mtry = 17
+reviews.rf.bigram <- randomForest(as.factor(label) ~ ., 
+                                  data = data.frame(as.matrix(train.dtm.rf.bigram), 
+                                                    label = labels[index.train]))
+# Make predictions
+reviews.rf.bigram.pred <- predict(reviews.rf.bigram, 
+                                  newdata = data.frame(as.matrix(test.dtm.rf.bigram), 
+                                                       label = labels[-index.train]))
+
+# Confusion matrix
+conf.mat.rf.bigram <- table(labels[-index.train], reviews.rf.bigram.pred, dnn = c("actual", "predicted"))
+
+perf.rf.bigram <-performance(conf.mat.rf.bigram) 
+perf.rf.bigram %>% kable()
 ```
 
 # Hyper-parameters
