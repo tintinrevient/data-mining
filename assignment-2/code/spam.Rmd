@@ -72,7 +72,7 @@ calculate.topn <- function(dtm, topn) {
   mi[mi.order[topn]]
   
   # Return top-n mutual-information terms' index
-  return(mi.order[topn])
+  return(list(mi.order[topn], mi[mi.order[topn]]))
 }
 
 # performance metrics
@@ -184,6 +184,8 @@ test.dtm.bigram <- DocumentTermMatrix(reviews.all[-index.train],
 
 ## Feature selection
 
+### Frequency
+
 ```{r frequency_based_feature_selection}
 # Remove terms that occur in less than 5% of the documents
 # Training document-term matrix
@@ -205,22 +207,32 @@ train.dtm.bigram.freq <- cbind(train.dtm.freq, train.dtm.bigram.freq)
 test.dtm.bigram.freq <- cbind(test.dtm.freq, test.dtm.bigram.freq)
 ```
 
+### Mutual Information
+
 ```{r mutual_info_feature_selection}
 
 # Select top-n mutual-information terms from total vocabularies
 index.top300 <- calculate.topn(train.dtm, topn = c(1:300))
-train.dtm.top300 <- train.dtm[, index.top300]
-test.dtm.top300 <- test.dtm[, index.top300]
+train.dtm.top300 <- train.dtm[, index.top300[[1]]]
+test.dtm.top300 <- test.dtm[, index.top300[[1]]]
+
+# Show part of mutual-info-only top-300 words
+index.top300[[2]][1:30]
 
 # Select top-n mutual-information terms from frequent terms
 index.freq.top200 <- calculate.topn(train.dtm.freq, topn = c(1:200))
-train.dtm.freq.top200 <- train.dtm[, index.freq.top200]
-test.dtm.freq.top200 <- test.dtm[, index.freq.top200]
+train.dtm.freq.top200 <- train.dtm[, index.freq.top200[[1]]]
+test.dtm.freq.top200 <- test.dtm[, index.freq.top200[[1]]]
+
+# Show part of frequent top-200 words
+index.freq.top200[[2]][1:30]
 ```
 
 # Classifiers
 
 ## Multinomial naive Bayes
+
+### 1. Multinomial naive Bayes - Unigram
 
 ```{r classifier_mnb}
 # 4-fold cross validation
@@ -250,7 +262,9 @@ for(i in 1:4) {
 # Confusion matrix
 conf.mat.mnb <- table(reviews.mnb.actual, reviews.mnb.pred, dnn = c("actual", "predicted"))
 perf.mnb <-performance(conf.mat.mnb) 
+```
 
+```{r mnb_perf}
 perf.mnb %>% kable()
 ```
 
@@ -271,7 +285,9 @@ perf.mnb.test <-performance(conf.mat.mnb.test)
 perf.mnb.test %>% kable()
 ```
 
-```{r classifier_mnb_with_bigram}
+### 2. Multinomial naive Bayes - Bigram
+
+```{r classifier_mnb_with_bigram, include=FALSE}
 # 4-fold cross validation
 reviews.mnb.bigram.pred <- c()
 reviews.mnb.bigram.actual <- c()
@@ -301,13 +317,17 @@ for(i in 1:4) {
 conf.mat.mnb.bigram <- table(reviews.mnb.bigram.actual, reviews.mnb.bigram.pred, 
                              dnn = c("actual", "predicted"))
 perf.mnb.bigram <-performance(conf.mat.mnb.bigram) 
+```
 
+```{r mnb_bigram_perf}
 perf.mnb.bigram %>% kable()
 ```
 
 ## Regularized logistic regression
 
-```{r logistic_regression}
+### 3. Regularized logistic regression - Unigram
+
+```{r logistic_regression, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
 train.dtm.glmet <- train.dtm.freq
@@ -327,12 +347,16 @@ reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm.glmet),
 
 # Confusion matrix
 conf.mat.logreg <- table(labels[-index.train], reviews.logreg.pred, dnn = c("actual", "predicted"))
-
 perf.logreg <-performance(conf.mat.logreg) 
+```
+
+```{r logreg_perf}
 perf.logreg %>% kable()
 ```
 
-```{r logistic_regression_with_bigram}
+### 4. Regularized logistic regression - Bigram
+
+```{r logistic_regression_with_bigram, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
 train.dtm.glmet.bigram <- train.dtm.bigram.freq
@@ -353,14 +377,18 @@ reviews.logreg.bigram.pred <- predict(reviews.glmnet.bigram, newx=as.matrix(test
 # Confusion matrix
 conf.mat.logreg.bigram <- table(labels[-index.train], reviews.logreg.bigram.pred, 
                                 dnn = c("actual", "predicted"))
+perf.logreg.bigram <-performance(conf.mat.logreg.bigram)
+```
 
-perf.logreg.bigram <-performance(conf.mat.logreg.bigram) 
+```{r logreg_bigram_perf}
 perf.logreg.bigram %>% kable()
 ```
 
 ## Classification trees
 
-```{r classifier_rpart}
+### 5. Classification trees - Unigram
+
+```{r classifier_rpart, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
 train.dtm.rpart <- train.dtm.freq
@@ -386,12 +414,19 @@ reviews.rpart.pred <- predict(reviews.rpart.pruned,
 
 # Confusion matrix
 conf.mat.rpart <- table(labels[-index.train], reviews.rpart.pred, dnn = c("actual", "predicted"))
-
 perf.rpart <-performance(conf.mat.rpart) 
+```
+
+```{r rpart_perf}
+# Plot the tree
+rpart.plot(reviews.rpart.pruned)
+
 perf.rpart %>% kable()
 ```
 
-```{r classifier_rpart_bigram}
+### 6. Classification trees - Bigram
+
+```{r classifier_rpart_bigram, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
 train.dtm.rpart.bigram <- train.dtm.bigram.freq
@@ -418,14 +453,21 @@ reviews.rpart.bigram.pred <- predict(reviews.rpart.bigram.pruned,
 # Confusion matrix
 conf.mat.rpart.bigram <- table(labels[-index.train], reviews.rpart.bigram.pred, 
                                dnn = c("actual", "predicted"))
-
 perf.rpart.bigram <-performance(conf.mat.rpart.bigram) 
+```
+
+```{r rpart_bigram_perf}
+# Plot the tree
+rpart.plot(reviews.rpart.bigram.pruned)
+
 perf.rpart.bigram %>% kable()
 ```
 
 ## Random forests
 
-```{r classifier_rf}
+### 7. Random forests - Unigram
+
+```{r classifier_rf, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
 train.dtm.rf <- train.dtm.freq
@@ -440,12 +482,16 @@ reviews.rf.pred <- predict(reviews.rf,
 
 # Confusion matrix
 conf.mat.rf <- table(labels[-index.train], reviews.rf.pred, dnn = c("actual", "predicted"))
-
 perf.rf <-performance(conf.mat.rf) 
+```
+
+```{r rf_perf}
 perf.rf %>% kable()
 ```
 
-```{r classifier_rf_bigram}
+### 8. Random forests - Bigram
+
+```{r classifier_rf_bigram, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
 train.dtm.rf.bigram <- train.dtm.bigram.freq
@@ -462,8 +508,10 @@ reviews.rf.bigram.pred <- predict(reviews.rf.bigram,
 
 # Confusion matrix
 conf.mat.rf.bigram <- table(labels[-index.train], reviews.rf.bigram.pred, dnn = c("actual", "predicted"))
-
 perf.rf.bigram <-performance(conf.mat.rf.bigram) 
+```
+
+```{r rf_bigram_perf}
 perf.rf.bigram %>% kable()
 ```
 
