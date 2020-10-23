@@ -86,7 +86,7 @@ corpus <- VCorpus(VectorSource(df[["review"]])) %>%
 ```{r frequency}
 
 dtm <- DocumentTermMatrix(corpus) %>%
-  removeSparseTerms(., sparse = 0.7) # those terms from x are removed which have at least a 70
+  removeSparseTerms(., sparse = 0.95) # those terms from x are removed which have at least a 70
 # percent of empty (i.e., terms occurring 0 times in a document) elements. I.e., the resulting
 # matrix contains only terms with a sparse factor of less than 70 percent
 
@@ -390,23 +390,29 @@ ntreeTry = 1500
 #???? what about 77?
 
 #create a matrix to optimize the stepfactor and improve values
-tune_matrix <- matrix(0, nrow = 10, ncol = 10)
+tune_matrix <- matrix(0, nrow = 100, ncol = 10)
 
 #loop through the ranges of both values
 for (i in 1: 10)
-  for(j in 0.0005 : 0.05)
+  for(j in 1 : 5)
     #stepFactor = 1.4
     stepFactor = i
     #improve = 0.0005
     improve = j
 
     #perform the tuneRF function to find the optimal mtry
-    model_random <- tuneRF (x = train_dtm, y = train_labels, ntreeTry = ntreeTry, stepFactor = stepFactor, improve= improve, trace = TRUE, plot = TRUE, doBest = TRUE)
-    
+    #model_random <- tuneRF (x = train_dtm, y = train_labels, ntreeTry = ntreeTry, stepFactor = stepFactor, improve= improve, trace = FALSE, plot = FALSE, doBest = FALSE)
     
     #add the lowest OOB score to the matrix
     #find out how to do this
-    #tune_matrix[i,j] = min(trace())
+    tune_matrix[i,j] <- i; tune_matrix 
+    #min(trace())
+    
+print(tune_matrix)    
+stepFactor = 1.5
+improve = 0.05
+#model_random <- tuneRF (x = train_dtm, y = train_labels, ntreeTry = ntreeTry, stepFactor = stepFactor, improve= improve, trace = TRUE, plot = TRUE, doBest = TRUE)
+
     
     
 
