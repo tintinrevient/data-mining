@@ -10,6 +10,7 @@ output:
 ```{r library, include=FALSE}
 library(tidyverse)
 library(knitr)
+library(varhandle)
 library(tm)
 library(entropy)
 library(SnowballC)
@@ -20,7 +21,7 @@ library(randomForest)
 ```
 
 ```{r basic_functions, include=FALSE}
-# train by multi-normial bayes
+# Train by multinormial naive Bayes
 train.mnb <- function (dtm,labels) {
   call <- match.call()
   V <- ncol(dtm)
@@ -44,7 +45,7 @@ train.mnb <- function (dtm,labels) {
   list(call=call,prior=prior,cond.probs=cond.probs)    
 }
 
-# predict by multi-normial bayes
+# Predict by multinormial naive Bayes
 predict.mnb <- function (model,dtm) {
   classlabels <- dimnames(model$cond.probs)[[2]]
   logprobs <- dtm %*% log(model$cond.probs)
@@ -54,8 +55,8 @@ predict.mnb <- function (model,dtm) {
   classlabels[max.col(logprobs)]
 }
 
-# return top-n high mutual-information terms' index
-calculate.topn <- function(dtm, topn) {
+# Calculate top-n high mutual-information terms' indices
+calculate_topn <- function(dtm, topn) {
   # Convert document term matrix to binary (term present/absent)
   dtm.bin <- as.matrix(dtm) > 0
   
@@ -68,14 +69,37 @@ calculate.topn <- function(dtm, topn) {
   # Sort the indices from high to low mutual information
   mi.order <- order(mi, decreasing = TRUE)
   
-  # Show top-n mutual-information terms
-  mi[mi.order[topn]]
-  
   # Return top-n mutual-information terms' index
-  return(list(mi.order[topn], mi[mi.order[topn]]))
+  return(list(mi.order[c(1:topn)], mi[mi.order[c(1:topn)]]))
 }
 
-# performance metrics
+# Calculate the training samples used for cross-validation
+calculate_cv <- function(train.dtm, topn, train.dtm.appendix, topn.appendix) {
+  # Initialize the training samples
+  train.dtm.topn <- NULL
+  
+  # Whether to calculate top-n
+  if(is.null(topn)) {
+    # Use the total train.dtm
+    train.dtm.topn <- train.dtm
+  } else {
+    # Calculate top-n features out of train.dtm
+    index.topn <- calculate_topn(train.dtm, topn = topn)
+    train.dtm.topn <- train.dtm[, index.topn[[1]]]
+    
+    # Whether to combine bigrams with unigrams
+    if(!is.na(train.dtm.appendix) && !is.na(topn.appendix)) {
+      index.topn.appendix <- calculate_topn(train.dtm.appendix, topn = topn.appendix)
+      train.dtm.topn.appendix <- train.dtm.appendix[, index.topn.appendix[[1]]]
+      train.dtm.topn <- cbind(train.dtm.topn, train.dtm.topn.appendix)
+    }
+  }
+  
+  # Return the training samples
+  return(train.dtm.topn)
+}
+
+# Performance metrics
 performance <- function(confusion_matrix){
   tn <- confusion_matrix[1,1]
   fn <- confusion_matrix[2,1]
@@ -156,6 +180,8 @@ reviews.all <- reviews.all %>%
   tm_map(removeNumbers) %>% 
   # Remove excess whitespace
   tm_map(stripWhitespace)
+
+# stemming, part-of-speech tagging
 ```
 
 ```{r train_and_test_dtm}
@@ -199,76 +225,161 @@ train.dtm.bigram.freq <- removeSparseTerms(train.dtm.bigram, 0.99)
 # Test document-term matrix for bigrams
 test.dtm.bigram.freq <- DocumentTermMatrix(reviews.all[-index.train], 
                                            list(dictionary = dimnames(train.dtm.bigram.freq)[[2]]))
-
-# Combine unigrams and bigrams
-# Training document-term matrix for unigrams and bigrams
-train.dtm.bigram.freq <- cbind(train.dtm.freq, train.dtm.bigram.freq)
-# Test document-term matrix for unigrams and bigrams
-test.dtm.bigram.freq <- cbind(test.dtm.freq, test.dtm.bigram.freq)
 ```
 
 ### Mutual Information
 
-```{r mutual_info_feature_selection}
-
+```{r mutual_info_feature_selection, eval=FALSE}
 # Select top-n mutual-information terms from total vocabularies
-index.top300 <- calculate.topn(train.dtm, topn = c(1:300))
-train.dtm.top300 <- train.dtm[, index.top300[[1]]]
-test.dtm.top300 <- test.dtm[, index.top300[[1]]]
+index.top50 <- calculate_topn(train.dtm, topn = 50)
+train.dtm.top50 <- train.dtm[, index.top50[[1]]]
+test.dtm.top50 <- test.dtm[, index.top50[[1]]]
+
+# Show part of mutual-info-only top-500 words
+index.top50[[2]][1:30]
+
+# Select top-n mutual-information bigrams from total bigrams
+index.bigram.top50 <- calculate_topn(train.dtm.bigram, topn = 50)
+train.dtm.bigram.top50 <- train.dtm.bigram[, index.bigram.top50[[1]]]
+test.dtm.bigram.top50 <- test.dtm.bigram[, index.bigram.top50[[1]]]
 
 # Show part of mutual-info-only top-300 words
-index.top300[[2]][1:30]
-
-# Select top-n mutual-information terms from frequent terms
-index.freq.top200 <- calculate.topn(train.dtm.freq, topn = c(1:200))
-train.dtm.freq.top200 <- train.dtm[, index.freq.top200[[1]]]
-test.dtm.freq.top200 <- test.dtm[, index.freq.top200[[1]]]
-
-# Show part of frequent top-200 words
-index.freq.top200[[2]][1:30]
+index.bigram.top50[[2]][1:30]
 ```
 
 # Classifiers
 
 ## Multinomial naive Bayes
 
-### 1. Multinomial naive Bayes - Unigram
-
-```{r classifier_mnb}
-# 4-fold cross validation
-reviews.mnb.pred <- c()
-reviews.mnb.actual <- c()
-
-# hyper-parameter: feature selection
-# the best option: only mutual information to select top-300 terms out of 6900 total terms
-train.dtm.mnb <- train.dtm.top300
-
-for(i in 1:4) {
-  # Validation fold
-  val.start <- (i - 1) * 80 + 1
-  val.end <- val.start + 80 - 1
-  val.range <- c(c(val.start:val.end), 320+c(val.start:val.end))
+```{r mnb_basic_cv_functions, include=FALSE}
+mnb_cv <- function(train.dtm, topn, train.dtm.appendix, topn.appendix) {
   
-  # Training fold
-  train.range <- c(c(1:320)[-val.range], 320+c(1:320)[-val.range])
+  # Calcuate the training samples
+  train.dtm.topn <- calculate_cv(train.dtm, topn, train.dtm.appendix, topn.appendix)
   
-  # Train the model with priors and conditional probabilities
-  reviews.mnb <- train.mnb(as.matrix(train.dtm.mnb)[train.range,], labels[index.train][train.range])
-  # Make predictions
-  reviews.mnb.pred <- c(reviews.mnb.pred, predict.mnb(reviews.mnb, as.matrix(train.dtm.mnb)[val.range,]))
-  reviews.mnb.actual <- c(reviews.mnb.actual, labels[index.train][val.range])
+  # 4-fold cross validation
+  reviews.mnb.actual <- c()
+  reviews.mnb.pred <- c()
+    
+  # hyper-parameter: feature selection
+  # the best option: only mutual information to select top-500 terms out of 6900 total terms
+  train.dtm.mnb <- train.dtm.topn
+  
+  for(i in 1:4) {
+    # Validation fold
+    val.start <- (i - 1) * 80 + 1
+    val.end <- val.start + 80 - 1
+    val.range <- c(c(val.start:val.end), 320+c(val.start:val.end))
+    
+    # Training fold
+    train.range <- c(c(1:320)[-val.range], 320+c(1:320)[-val.range])
+    
+    # Train the model with priors and conditional probabilities
+    reviews.mnb <- train.mnb(as.matrix(train.dtm.mnb)[train.range,],
+                             labels[index.train][train.range])
+    
+    # Actual labels
+    reviews.mnb.actual <- c(reviews.mnb.actual, labels[index.train][val.range])
+    # Make predictions
+    reviews.mnb.pred <- c(reviews.mnb.pred, 
+                          predict.mnb(reviews.mnb, as.matrix(train.dtm.mnb)[val.range,]))
+  }
+  
+  # Return the vectors of actuals and predictions
+  return(list(actual = reviews.mnb.actual, pred = reviews.mnb.pred))
 }
 
+mnb_cv_topn <- function(train.dtm, seq.topn) {
+  # Initialize f1 and acc
+  f1 <- c()
+  acc <- c()
+  
+  # Iterate through top-n options
+  for(topn in seq.topn) {
+    
+    mnb.result <- mnb_cv(train.dtm, topn, NA, NA)
+    
+    # Confusion matrix
+    conf.mat.mnb <- table(mnb.result$actual, mnb.result$pred, dnn = c("actual", "predicted"))
+    perf.mnb <- performance(conf.mat.mnb)
+    
+    # F1 score
+    f1 <- c(f1, round(as.numeric(perf.mnb[14,'value']), 3))
+    # Accuracy
+    acc <- c(acc, round(as.numeric(perf.mnb[10,'value']), 3))
+  }
+  
+  # Return the list of f1 and acc
+  return(list(f1 = f1, acc = acc))
+}
+```
+
+### 1. Multinomial naive Bayes - Unigram
+
+```{r mnb, include=FALSE}
 # Confusion matrix
-conf.mat.mnb <- table(reviews.mnb.actual, reviews.mnb.pred, dnn = c("actual", "predicted"))
+result.mnb <- mnb_cv(train.dtm, 500, NA, NA)
+
+conf.mat.mnb <- table(result.mnb$actual, result.mnb$pred, dnn = c("actual", "predicted"))
 perf.mnb <-performance(conf.mat.mnb) 
 ```
 
-```{r mnb_perf}
+```{r mnb_perf, echo=FALSE}
 perf.mnb %>% kable()
 ```
 
-```{r classifier_mnb_test_performance, include=FALSE}
+```{r mnb_topn_df, eval=FALSE, include=FALSE}
+# Initialize x and all the ys for mutual information
+seq.topn.mi <- seq(50, 1000, by = 50)
+result.mnb.mi <- mnb_cv_topn(train.dtm, seq.topn.mi)
+
+# Initialize all the ys for frequency
+seq.topn.freq <- seq(50, 300, by = 50)
+result.mnb.freq <- mnb_cv_topn(train.dtm.freq, seq.topn.freq)
+
+list.mnb.mi <- list(x = seq.topn.mi, 
+                    F1_score_by_mutual_info = result.mnb.mi$f1, 
+                    Accuracy_by_mutual_info = result.mnb.mi$acc)
+
+num.na <- length(seq.topn.mi) - length(seq.topn.freq)
+
+list.mnb.freq <- list(F1_score_by_frequency = c(result.mnb.freq$f1, rep(NA, num.na)),
+                      Accuracy_by_frequency = c(result.mnb.freq$acc, rep(NA, num.na)))
+```
+
+```{r mnb_topn_df_plot, eval=FALSE, include=FALSE}
+df.mnb.topn <- data.frame(list.mnb.mi, list.mnb.freq)
+
+df.mnb.topn %>% 
+  gather(key, value, F1_score_by_mutual_info, Accuracy_by_mutual_info, 
+         F1_score_by_frequency, Accuracy_by_frequency) %>% 
+  ggplot(aes(x = x, y = value, colour = key)) +
+  geom_line() +
+  geom_point() +
+  geom_jitter() +
+  scale_x_log10(breaks = c(50, 100, 150, 200, 250, 300, 350, 500, 1000)) + 
+  theme(legend.position = c(0.8, 0.2)) +
+  xlab("Top-n terms") +
+  ylab("Percent")
+```
+
+```{r mnb_top300_word_analysis, eval=FALSE, include=FALSE}
+# Select top-n mutual-information terms from total vocabularies
+index.top307 <- calculate_topn(train.dtm, topn = 307)
+# Select top-n mutual-information terms from frequent terms
+index.top307.freq <- calculate_topn(train.dtm.freq, topn = 307)
+
+# Combine mi-terms and frequent terms
+words.mnb.unigram <- t(bind_rows(index.top307[[2]], index.top307.freq[[2]]))
+colnames(words.mnb.unigram) <- c('Top-307 mutual info', 'Top-307 frequent')
+# Save to top307_unigrams.csv
+write.csv(words.mnb.unigram, file = file.path('pix', 'mnb_unigrams.csv'))
+
+# Print the partial result
+words.mnb.unigram[1:20,]
+```
+
+```{r mnb_test, eval=FALSE, include=FALSE}
 # Final training set and test set
 train.dtm.mnb <- train.dtm.top300
 test.dtm.mnb <- test.dtm.top300
@@ -287,40 +398,67 @@ perf.mnb.test %>% kable()
 
 ### 2. Multinomial naive Bayes - Bigram
 
-```{r classifier_mnb_with_bigram, include=FALSE}
-# 4-fold cross validation
-reviews.mnb.bigram.pred <- c()
-reviews.mnb.bigram.actual <- c()
-
-# hyper-parameter: feature selection
-# the best option: only mutual information to select top-300 terms out of 6900 total terms
-train.dtm.mnb.bigram <- train.dtm.bigram.freq
-
-for(i in 1:4) {
-  # Validation fold
-  val.start <- (i - 1) * 80 + 1
-  val.end <- val.start + 80 - 1
-  val.range <- c(c(val.start:val.end), 320+c(val.start:val.end))
-  
-  # Training fold
-  train.range <- c(c(1:320)[-val.range], 320+c(1:320)[-val.range])
-  
-  # Train the model with priors and conditional probabilities
-  reviews.mnb <- train.mnb(as.matrix(train.dtm.mnb.bigram)[train.range,], labels[index.train][train.range])
-  # Make predictions
-  reviews.mnb.bigram.pred <- c(reviews.mnb.bigram.pred, 
-                               predict.mnb(reviews.mnb, as.matrix(train.dtm.mnb.bigram)[val.range,]))
-  reviews.mnb.bigram.actual <- c(reviews.mnb.bigram.actual, labels[index.train][val.range])
-}
-
+```{r mnb_bigram, include=FALSE}
 # Confusion matrix
-conf.mat.mnb.bigram <- table(reviews.mnb.bigram.actual, reviews.mnb.bigram.pred, 
-                             dnn = c("actual", "predicted"))
-perf.mnb.bigram <-performance(conf.mat.mnb.bigram) 
+result.mnb.bigram <- mnb_cv(train.dtm.bigram, 2000, train.dtm, 500)
+
+conf.mat.mnb.bigram <- table(result.mnb.bigram$actual, result.mnb.bigram$pred, dnn = c("actual", "predicted"))
+perf.mnb.bigram <- performance(conf.mat.mnb.bigram)
 ```
 
-```{r mnb_bigram_perf}
+```{r mnb_bigram_perf, echo=FALSE}
 perf.mnb.bigram %>% kable()
+```
+
+```{r mnb_bigram_topn_df, eval=FALSE, include=FALSE}
+# Initialize x and all the ys for mutual information
+seq.topn.mi.bigram <- seq(50, 2000, by = 50)
+result.mnb.mi.bigram <- mnb_cv_topn(train.dtm.bigram, seq.topn.mi.bigram)
+
+# Initialize all the ys for frequency
+seq.topn.freq.bigram <- seq(50, 350, by = 50)
+result.mnb.freq.bigram <- mnb_cv_topn(train.dtm.bigram.freq, seq.topn.freq.bigram)
+
+list.mnb.mi.bigram <- list(x = seq.topn.mi.bigram, 
+                           F1_score_by_mutual_info = result.mnb.mi.bigram$f1, 
+                           Accuracy_by_mutual_info = result.mnb.mi.bigram$acc)
+
+num.na.bigram <- length(seq.topn.mi.bigram) - length(seq.topn.freq.bigram)
+
+list.mnb.freq.bigram <- list(F1_score_by_frequency = c(result.mnb.freq.bigram$f1, rep(NA, num.na.bigram)),
+                             Accuracy_by_frequency = c(result.mnb.freq.bigram$acc, rep(NA, num.na.bigram)))
+```
+
+```{r mnb_bigram_topn_df_plot, eval=FALSE, include=FALSE}
+df.mnb.topn.bigram <- data.frame(list.mnb.mi.bigram, list.mnb.freq.bigram)
+
+df.mnb.topn.bigram %>% 
+  gather(key, value, F1_score_by_mutual_info, Accuracy_by_mutual_info, 
+         F1_score_by_frequency, Accuracy_by_frequency) %>% 
+  ggplot(aes(x = x, y = value, colour = key)) +
+  geom_line() +
+  geom_point() +
+  geom_jitter() +
+  scale_x_sqrt(breaks = c(50, 100, 150, 200, 300, 400, 500, 1000, 1100, 1300, 1500)) + 
+  theme(legend.position = c(0.8, 0.2)) +
+  xlab("Top-n terms") +
+  ylab("Percent")
+```
+
+```{r mnb_bigram_top300_word_analysis, eval=FALSE, include=FALSE}
+# Select top-n mutual-information terms from total vocabularies
+index.top356.bigram <- calculate_topn(train.dtm.bigram, topn = 356)
+# Select top-n mutual-information terms from frequent terms
+index.top356.bigram.freq <- calculate_topn(train.dtm.bigram.freq, topn = 356)
+
+# Combine mi-terms and frequent terms
+words.mnb.bigram <- t(bind_rows(index.top356.bigram[[2]], index.top356.bigram.freq[[2]]))
+colnames(words.mnb.bigram) <- c('Top-356 mutual info', 'Top-356 frequent')
+# Save to top307_unigrams.csv
+write.csv(words.mnb.bigram, file = file.path('pix', 'mnb_bigrams.csv'))
+
+# Print the partial result
+words.mnb.bigram[60:80,]
 ```
 
 ## Regularized logistic regression
@@ -334,23 +472,45 @@ train.dtm.glmet <- train.dtm.freq
 test.dtm.glmet <- test.dtm.freq
 
 # Logistic regression with lasso penalty
+# lambda: optional user-supplied lambda sequence; default is NULL, and glmnet chooses its own sequence
+# alpha=1 is assumed by default; when alpha=0, ridge model is fit and if alpha=1, a lasso model is fit.
+# type.measure: loss to use for cross-validation
+# type.measure="class" applies to binomial and multinomial logistic regression only, and gives misclassification error
+# nfolds: number of folds - default is 10; smallest value allowable is nfolds=3
 reviews.glmnet <- cv.glmnet(as.matrix(train.dtm.glmet), labels[index.train], 
-                            family="binomial", type.measure="class")
+                            alpha = 1,
+                            family="binomial",
+                            # family="multinomial",
+                            type.measure="class",
+                            nfolds = 10)
 # Cross-validation on lambda
 plot(reviews.glmnet)
+# See the value of lambda which results in the smallest CV error = value of lambda that gives minimum cvm
+# it is equal to log(reviews.glmnet$lambda.min) = 1st vertical line
+reviews.glmnet$lambda.min
+# Largest value of lambda such that error is within 1 standard error of the minimum
+# it is equal to log(reviews.glmnet$lambda.1se) = 2nd vertical line
+reviews.glmnet$lambda.1se
+
+# lambda: the values of lambda used in the fits
+# reviews.glmnet$lambda
+# cvm: the mean cross-validated error - a vector of length length(lambda)
+# reviews.glmnet$cvm
 
 # coef(reviews.glmnet, s="lambda.1se")
 
-# Make predictions on the test set
-reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm.glmet), 
-                               s="lambda.1se", type="class")
+# Make predictions on the training set
+# s: value(s) of the penalty parameter lambda at which predictions are required
+reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(train.dtm.glmet), 
+                               s="lambda.1se", 
+                               type="class")
 
 # Confusion matrix
-conf.mat.logreg <- table(labels[-index.train], reviews.logreg.pred, dnn = c("actual", "predicted"))
+conf.mat.logreg <- table(labels[index.train], reviews.logreg.pred, dnn = c("actual", "predicted"))
 perf.logreg <-performance(conf.mat.logreg) 
 ```
 
-```{r logreg_perf}
+```{r logreg_perf, echo=FALSE}
 perf.logreg %>% kable()
 ```
 
@@ -359,8 +519,8 @@ perf.logreg %>% kable()
 ```{r logistic_regression_with_bigram, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
-train.dtm.glmet.bigram <- train.dtm.bigram.freq
-test.dtm.glmet.bigram <- test.dtm.bigram.freq
+train.dtm.glmet.bigram <- cbind(train.dtm.bigram.freq, train.dtm.freq)
+test.dtm.glmet.bigram <- cbind(test.dtm.bigram.freq, test.dtm.freq)
 
 # Logistic regression with lasso penalty
 reviews.glmnet.bigram <- cv.glmnet(as.matrix(train.dtm.glmet.bigram), labels[index.train], 
@@ -380,86 +540,193 @@ conf.mat.logreg.bigram <- table(labels[-index.train], reviews.logreg.bigram.pred
 perf.logreg.bigram <-performance(conf.mat.logreg.bigram)
 ```
 
-```{r logreg_bigram_perf}
+```{r logreg_bigram_perf, echo=FALSE}
 perf.logreg.bigram %>% kable()
 ```
 
 ## Classification trees
 
+```{r rpart_basic_cv_functions, include=FALSE}
+# cp = -1 -> the tree will be fully grown
+# minsplit: the minimum number of observations that must exist in a node in order for a split to be attempted
+# minbucket: the minimum number of observations in any terminal node
+# parms: list(split = 'information') -> information gain, and the default setting is gini index
+# Loss matrix
+#      [,1] [,2]
+# [1,]    0    1 -> false positive
+# [2,]    3    0 -> false negative
+rpart_cv <- function(train.dtm, cp, minsplit, minbucket, loss) {
+  # 4-fold cross validation to select other hyper-parameters: e.g. minsplit, minbucket, mindepth, loss, etc.
+  reviews.rpart.actual <- c()
+  reviews.rpart.pred <- c()
+  
+  # the four trees out of 4-fold cross validation
+  reviews.rpart.cv <- list(length = 4)
+  
+  for(i in 1:4) {
+    # Validation fold
+    val.start <- (i - 1) * 80 + 1
+    val.end <- val.start + 80 - 1
+    val.range <- c(c(val.start:val.end), 320+c(val.start:val.end))
+    
+    # Training fold
+    train.range <- c(c(1:320)[-val.range], 320+c(1:320)[-val.range])
+    
+    # Grow the tree
+    reviews.rpart.cv[[i]] <- rpart(label ~ ., 
+                           data = data.frame(as.matrix(train.dtm)[train.range,], 
+                                             label = labels[index.train][train.range]), 
+                           cp = cp,
+                           minsplit = minsplit,
+                           minbucket = minbucket,
+                           # parms = list(split = 'information'),
+                           parms = list(loss = loss),
+                           method = "class")
+    
+    # Actual labels
+    reviews.rpart.actual <- c(reviews.rpart.actual, labels[index.train][val.range])
+    # Make predictions on the test set
+    reviews.rpart.pred <- c(reviews.rpart.pred, 
+                            unfactor(predict(reviews.rpart.cv[[i]],
+                                             newdata = data.frame(as.matrix(train.dtm)[val.range,]),
+                                             type = "class")))
+  }
+  
+  # Return the vectors of actuals and predictions
+  return(list(actual = reviews.rpart.actual, pred = reviews.rpart.pred))
+}
+```
+
 ### 5. Classification trees - Unigram
 
-```{r classifier_rpart, include=FALSE}
+```{r rpart_hyper_params, include=FALSE}
 # hyper-parameter: feature selection
-# the best option: ???
-train.dtm.rpart <- train.dtm.freq
-test.dtm.rpart <- test.dtm.freq
+train.dtm.rpart <- calculate_cv(train.dtm, 500, NA, NA)
+cp.rpart <- 0
+minsplit.rpart <- 15
+minbucket.rpart <-5
+loss.rpart <- matrix(c(0, 1, 2, 0), nrow = 2, ncol = 2, byrow = TRUE)
+```
 
-# Grow the tree
+```{r rpart_cv_of_other_hyper_params, eval=FALSE, include=FALSE}
+result.rpart <- rpart_cv(train.dtm.rpart, cp.rpart, minsplit.rpart, minbucket.rpart, loss.rpart)
+
+# Confusion matrix
+conf.mat.rpart <- table(result.rpart$actual, result.rpart$pred, dnn = c("actual", "predicted"))
+perf.rpart <- performance(conf.mat.rpart) 
+```
+
+```{r rpart_cv_of_cp, echo=FALSE}
+# 10-fold cross validation to select the value of cp
 reviews.rpart <- rpart(label ~ ., 
-                       data = data.frame(as.matrix(train.dtm.rpart), label = labels[index.train]), 
-                       cp = 0,
-                       method = "class")
-
+                         data = data.frame(as.matrix(train.dtm.rpart), label = labels[index.train]), 
+                         cp = cp.rpart,
+                         minsplit = minsplit.rpart,
+                         minbucket = minbucket.rpart,
+                         # parms = list(split = 'information'),
+                         parms = list(loss = loss.rpart),
+                         method = "class")
+  
 # Plot cv-error of pruning sequence
 plotcp(reviews.rpart)
-# Tree with lowest cv error
-reviews.rpart.pruned <- prune(reviews.rpart, cp=0.014)
-# Plot the tree
-rpart.plot(reviews.rpart.pruned)
+# When rpart grows a tree, it performs 10-fold cross validation on the data
+# Use printcp() to see the cross validation results
+# printcp(reviews.rpart)
 
-# Make predictions on the test set
+# Tree with lowest cv error
+reviews.rpart.pruned <- prune(reviews.rpart, cp=0.0066)
+
+# View variable importance
+# The sum of the goodness of split measures for each split for which it was the primary variable
+# reviews.rpart.pruned$variable.importance
+# words.rpart.unigram <- t(bind_rows(as.list(reviews.rpart.pruned$variable.importance)))
+# write.csv(words.rpart.unigram, file = file.path('pix', 'rpart_unigrams.csv'))
+
+# Plot the tree
+# rpart.plot(reviews.rpart.pruned)
+# varlen=0: use full names.
+prp(reviews.rpart.pruned, varlen=0)
+```
+
+```{r rpart_perf, echo=FALSE}
+# Predict and show probability
+# predict(reviews.rpart.pruned, newdata = data.frame(as.matrix(test.dtm.rpart[1:5,])), type = "prob")
+
 reviews.rpart.pred <- predict(reviews.rpart.pruned,
-                              newdata = data.frame(as.matrix(test.dtm.rpart)), 
+                              newdata = data.frame(as.matrix(train.dtm.rpart)),
                               type = "class")
 
 # Confusion matrix
-conf.mat.rpart <- table(labels[-index.train], reviews.rpart.pred, dnn = c("actual", "predicted"))
-perf.rpart <-performance(conf.mat.rpart) 
-```
-
-```{r rpart_perf}
-# Plot the tree
-rpart.plot(reviews.rpart.pruned)
-
+conf.mat.rpart <- table(labels[index.train], reviews.rpart.pred, dnn = c("actual", "predicted"))
+perf.rpart <- performance(conf.mat.rpart)
 perf.rpart %>% kable()
 ```
 
 ### 6. Classification trees - Bigram
 
-```{r classifier_rpart_bigram, include=FALSE}
+```{r rpart_hyper_params_bigram, include=FALSE}
 # hyper-parameter: feature selection
-# the best option: ???
-train.dtm.rpart.bigram <- train.dtm.bigram.freq
-test.dtm.rpart.bigram <- test.dtm.bigram.freq
+train.dtm.rpart.bigram <- calculate_cv(train.dtm.bigram, 2000, NA, NA)
+cp.rpart.bigram <- 0
+minsplit.rpart.bigram <-15
+minbucket.rpart.bigram <-5
+loss.rpart.bigram <- matrix(c(0, 1, 2, 0), nrow = 2, ncol = 2, byrow = TRUE)
+```
 
-# Grow the tree
+```{r rpart_cv_of_other_hyper_params_bigram, eval=FALSE, include=FALSE}
+result.rpart.bigram <- rpart_cv(train.dtm.rpart.bigram, 
+                                cp.rpart.bigram, minsplit.rpart.bigram,
+                                minbucket.rpart.bigram,
+                                loss.rpart.bigram)
+
+# Confusion matrix
+conf.mat.rpart.bigram <- table(result.rpart.bigram$actual, result.rpart.bigram$pred, 
+                               dnn = c("actual", "predicted"))
+perf.rpart.bigram <- performance(conf.mat.rpart.bigram) 
+```
+
+```{r rpart_cv_of_cp_bigram, echo=FALSE}
+# 10-fold cross validation to select the value of cp
 reviews.rpart.bigram <- rpart(label ~ ., 
                               data = data.frame(as.matrix(train.dtm.rpart.bigram), 
                                                 label = labels[index.train]), 
-                              cp = 0, method = "class")
-
+                              cp = cp.rpart.bigram,
+                              minsplit = minsplit.rpart.bigram,
+                              minbucket = minbucket.rpart.bigram,
+                              # parms = list(split = 'information'),
+                              parms = list(loss = loss.rpart.bigram),
+                              method = "class")
+  
 # Plot cv-error of pruning sequence
 plotcp(reviews.rpart.bigram)
-# Tree with lowest cv error
-reviews.rpart.bigram.pruned <- prune(reviews.rpart.bigram, cp=0.014)
-# Plot the tree
-rpart.plot(reviews.rpart.bigram.pruned)
+# When rpart grows a tree, it performs 10-fold cross validation on the data
+# Use printcp() to see the cross validation results
+# printcp(reviews.rpart.bigram)
 
-# Make predictions on the test set
-reviews.rpart.bigram.pred <- predict(reviews.rpart.bigram.pruned,
-                                     newdata = data.frame(as.matrix(test.dtm.rpart.bigram)), 
+# Tree with lowest cv error
+reviews.rpart.bigram.pruned <- prune(reviews.rpart.bigram, cp=0.016)
+
+# View variable importance
+# The sum of the goodness of split measures for each split for which it was the primary variable
+# reviews.rpart.bigram.pruned$variable.importance
+# words.rpart.bigram <- t(bind_rows(as.list(reviews.rpart.bigram.pruned$variable.importance)))
+# write.csv(words.rpart.bigram, file = file.path('pix', 'rpart_bigrams.csv'))
+
+# Plot the tree
+# rpart.plot(reviews.rpart.bigram.pruned)
+# varlen=0: use full names.
+prp(reviews.rpart.bigram.pruned, varlen=0, yesno = FALSE)
+```
+
+```{r rpart_perf_bigram, echo=FALSE}
+reviews.rpart.pred.bigram <- predict(reviews.rpart.bigram.pruned,
+                                     newdata = data.frame(as.matrix(train.dtm.rpart.bigram)),
                                      type = "class")
 
 # Confusion matrix
-conf.mat.rpart.bigram <- table(labels[-index.train], reviews.rpart.bigram.pred, 
+conf.mat.rpart.bigram <- table(labels[index.train], reviews.rpart.pred.bigram, 
                                dnn = c("actual", "predicted"))
-perf.rpart.bigram <-performance(conf.mat.rpart.bigram) 
-```
-
-```{r rpart_bigram_perf}
-# Plot the tree
-rpart.plot(reviews.rpart.bigram.pruned)
-
+perf.rpart.bigram <- performance(conf.mat.rpart.bigram)
 perf.rpart.bigram %>% kable()
 ```
 
@@ -470,23 +737,73 @@ perf.rpart.bigram %>% kable()
 ```{r classifier_rf, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
-train.dtm.rf <- train.dtm.freq
-test.dtm.rf <- test.dtm.freq
+train.dtm.rf <- calculate_cv(train.dtm, 500, NA, NA)
 
 # Train random forest with default settings: 500 trees and mtry = 17
+# ntree: number of trees grown
+# mtry: number of predictors sampled for splitting at each node
+# nodesize: minimum size of terminal nodes
+# importance: should importance of predictors be assessed?
+# keep.forest: if set to FALSE, the forest will not be retained in the output object
+# keep.inbag: should an n by ntree matrix be returned that keeps track of which samples are “in-bag” in which trees
 reviews.rf <- randomForest(as.factor(label) ~ ., 
-                           data = data.frame(as.matrix(train.dtm.rf), label = labels[index.train]))
+                           data = data.frame(as.matrix(train.dtm.rf), label = labels[index.train]),
+                           ntree = 1000,
+                           mtry = 12,
+                           replace = TRUE,
+                           nodesize = 5,
+                           importance = TRUE,
+                           keep.forest = FALSE,
+                           keep.inbag = FALSE)
+
+# OOB estimate of error rate
+reviews.rf
+
+# reviews.rf$importance
+
+# predicted: the predicted values of the input data based on out-of-bag samples.
+# reviews.rf$predicted
+
+# forest: a list that contains the entire forest, if keep.forest=TRUE
+# reviews.rf$forest
+
+# Confusion matrix
+conf.mat.rf <- reviews.rf$confusion
+perf.rf <-performance(conf.mat.rf) 
+```
+
+```{r rf_perf, echo=FALSE}
+perf.rf %>% kable()
+```
+
+```{r rf_tune, eval=FALSE, include=FALSE}
+# ntreeTry: number of trees used at the tuning step
+# mtryStart: tarting value of mtry; default is the same as in randomForest
+# stepFactor: at each iteration, mtry is inflated (or deflated) by this value
+# improve: the (relative) improvement in OOB error must be by this much for the search to continue
+# trace: whether to print the progress of the search
+# plot: whether to plot the OOB error as function of mtry
+# doBest: whether to run a forest using the optimal mtry found
+# If doBest=FALSE (default): it returns a matrix whose first column contains the mtry values searched, and the second column the corresponding OOB error
+# If doBest=TRUE, it returns the randomForest object produced with the optimal mtry
+reviews.rf.mtry.tuned <- tuneRF(x = data.frame(as.matrix(train.dtm.rf)), y = labels[index.train],
+                                ntreeTry = 500,
+                                mtryStart = 300,
+                                stepFactor = 0.5,
+                                improve = 0.0001,
+                                trace = TRUE,
+                                plot = TRUE,
+                                doBest = FALSE)
+```
+
+```{r rf_test, eval=FALSE, include=FALSE}
 # Make predictions
 reviews.rf.pred <- predict(reviews.rf, 
                            newdata = data.frame(as.matrix(test.dtm.rf), label = labels[-index.train]))
 
 # Confusion matrix
 conf.mat.rf <- table(labels[-index.train], reviews.rf.pred, dnn = c("actual", "predicted"))
-perf.rf <-performance(conf.mat.rf) 
-```
-
-```{r rf_perf}
-perf.rf %>% kable()
+perf.rf <-performance(conf.mat.rf)
 ```
 
 ### 8. Random forests - Bigram
@@ -494,13 +811,43 @@ perf.rf %>% kable()
 ```{r classifier_rf_bigram, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
-train.dtm.rf.bigram <- train.dtm.bigram.freq
-test.dtm.rf.bigram <- test.dtm.bigram.freq
+train.dtm.rf.bigram <- calculate_cv(train.dtm.bigram, 2000, NA, NA)
 
 # Train random forest with default settings: 500 trees and mtry = 17
-reviews.rf.bigram <- randomForest(as.factor(label) ~ ., 
-                                  data = data.frame(as.matrix(train.dtm.rf.bigram), 
-                                                    label = labels[index.train]))
+reviews.rf.bigram <- randomForest(as.factor(label) ~ .,
+                                  data = data.frame(as.matrix(train.dtm.rf.bigram), label = labels[index.train]),
+                                  ntree = 1000,
+                                  mtry = 10,
+                                  # replace = FALSE,
+                                  nodesize = 5,
+                                  importance = TRUE,
+                                  keep.forest = FALSE,
+                                  keep.inbag = FALSE)
+
+# OOB estimate of error rate
+reviews.rf.bigram
+
+# Confusion matrix
+conf.mat.rf.bigram <- reviews.rf.bigram$confusion
+perf.rf.bigram <-performance(conf.mat.rf.bigram) 
+```
+
+```{r rf_bigram_perf, echo=FALSE}
+perf.rf.bigram %>% kable()
+```
+
+```{r rf_tune_bigram, eval=FALSE, include=FALSE}
+reviews.rf.bigram.mtry.tuned <- tuneRF(x = data.frame(as.matrix(train.dtm.rf.bigram)), y = labels[index.train],
+                                       ntreeTry = 500,
+                                       mtryStart = 300,
+                                       stepFactor = 0.5,
+                                       improve = 0.0001,
+                                       trace = TRUE,
+                                       plot = TRUE,
+                                       doBest = FALSE)
+```
+
+```{r rf_bigram_test, eval=FALSE, include=FALSE}
 # Make predictions
 reviews.rf.bigram.pred <- predict(reviews.rf.bigram, 
                                   newdata = data.frame(as.matrix(test.dtm.rf.bigram), 
@@ -509,10 +856,6 @@ reviews.rf.bigram.pred <- predict(reviews.rf.bigram,
 # Confusion matrix
 conf.mat.rf.bigram <- table(labels[-index.train], reviews.rf.bigram.pred, dnn = c("actual", "predicted"))
 perf.rf.bigram <-performance(conf.mat.rf.bigram) 
-```
-
-```{r rf_bigram_perf}
-perf.rf.bigram %>% kable()
 ```
 
 # Hyper-parameters
