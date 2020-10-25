@@ -468,8 +468,9 @@ words.mnb.bigram[60:80,]
 ```{r logistic_regression, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
-train.dtm.glmet <- train.dtm.freq
-test.dtm.glmet <- test.dtm.freq
+train.dtm.glmet <- calculate_cv(train.dtm, 500, NA, NA)
+test.dtm.glmet <- DocumentTermMatrix(reviews.all[-index.train], 
+                                     list(dictionary = dimnames(train.dtm.glmet)[[2]]))
 
 # Logistic regression with lasso penalty
 # lambda: optional user-supplied lambda sequence; default is NULL, and glmnet chooses its own sequence
@@ -483,35 +484,45 @@ reviews.glmnet <- cv.glmnet(as.matrix(train.dtm.glmet), labels[index.train],
                             # family="multinomial",
                             type.measure="class",
                             nfolds = 10)
+
 # Cross-validation on lambda
-plot(reviews.glmnet)
+# plot(reviews.glmnet)
+
 # See the value of lambda which results in the smallest CV error = value of lambda that gives minimum cvm
 # it is equal to log(reviews.glmnet$lambda.min) = 1st vertical line
-reviews.glmnet$lambda.min
+# reviews.glmnet$lambda.min
+
 # Largest value of lambda such that error is within 1 standard error of the minimum
 # it is equal to log(reviews.glmnet$lambda.1se) = 2nd vertical line
-reviews.glmnet$lambda.1se
+# reviews.glmnet$lambda.1se
 
 # lambda: the values of lambda used in the fits
 # reviews.glmnet$lambda
+
 # cvm: the mean cross-validated error - a vector of length length(lambda)
 # reviews.glmnet$cvm
 
-# coef(reviews.glmnet, s="lambda.1se")
-
 # Make predictions on the training set
 # s: value(s) of the penalty parameter lambda at which predictions are required
-reviews.logreg.pred <- predict(reviews.glmnet, newx=as.matrix(train.dtm.glmet), 
+reviews.glmnet.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm.glmet), 
                                s="lambda.1se", 
                                type="class")
 
 # Confusion matrix
-conf.mat.logreg <- table(labels[index.train], reviews.logreg.pred, dnn = c("actual", "predicted"))
-perf.logreg <-performance(conf.mat.logreg) 
+conf.mat.glmnet <- table(labels[index.train], reviews.glmnet.pred, dnn = c("actual", "predicted"))
+perf.glmnet <- performance(conf.mat.glmnet) 
 ```
 
 ```{r logreg_perf, echo=FALSE}
-perf.logreg %>% kable()
+perf.glmnet %>% kable()
+```
+
+```{r glmnet_word_analysis, eval=FALSE, include=FALSE}
+# coef(reviews.glmnet, s="lambda.1se")
+words.glmnet.unigram <- data.frame(term = rownames(as.matrix(coef(reviews.glmnet, s="lambda.1se")))[-1],
+                                   weight = coef(reviews.glmnet, s="lambda.1se")[-1])
+words.glmnet.unigram <- words.glmnet.unigram %>% filter(weight != 0) %>% arrange(desc(weight))
+write.csv(words.glmnet.unigram, file = file.path('pix', 'glmnet_unigrams.csv'))
 ```
 
 ### 4. Regularized logistic regression - Bigram
@@ -519,29 +530,39 @@ perf.logreg %>% kable()
 ```{r logistic_regression_with_bigram, include=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
-train.dtm.glmet.bigram <- cbind(train.dtm.bigram.freq, train.dtm.freq)
-test.dtm.glmet.bigram <- cbind(test.dtm.bigram.freq, test.dtm.freq)
+train.dtm.glmet.bigram <- calculate_cv(train.dtm.bigram, 2000, train.dtm, 500)
+test.dtm.glmet.bigram <- DocumentTermMatrix(reviews.all[-index.train], 
+                                            list(dictionary = dimnames(train.dtm.glmet.bigram)[[2]]))
 
 # Logistic regression with lasso penalty
 reviews.glmnet.bigram <- cv.glmnet(as.matrix(train.dtm.glmet.bigram), labels[index.train], 
                                    family="binomial", type.measure="class")
+
 # Cross-validation on lambda
-plot(reviews.glmnet.bigram)
+# plot(reviews.glmnet.bigram)
 
 # coef(reviews.glmnet.bigram, s="lambda.1se")
 
 # Make predictions on the test set
-reviews.logreg.bigram.pred <- predict(reviews.glmnet.bigram, newx=as.matrix(test.dtm.glmet.bigram), 
+reviews.glmnet.bigram.pred <- predict(reviews.glmnet.bigram, newx=as.matrix(test.dtm.glmet.bigram), 
                                       s="lambda.1se", type="class")
 
 # Confusion matrix
-conf.mat.logreg.bigram <- table(labels[-index.train], reviews.logreg.bigram.pred, 
+conf.mat.glmnet.bigram <- table(labels[-index.train], reviews.glmnet.bigram.pred, 
                                 dnn = c("actual", "predicted"))
-perf.logreg.bigram <-performance(conf.mat.logreg.bigram)
+perf.glmnet.bigram <- performance(conf.mat.glmnet.bigram)
 ```
 
 ```{r logreg_bigram_perf, echo=FALSE}
-perf.logreg.bigram %>% kable()
+perf.glmnet.bigram %>% kable()
+```
+
+```{r glmnet_word_analysis, eval=FALSE, include=FALSE}
+# coef(reviews.glmnet, s="lambda.1se")
+words.glmnet.bigram <- data.frame(term = rownames(as.matrix(coef(reviews.glmnet.bigram, s="lambda.1se")))[-1],
+                                  weight = coef(reviews.glmnet.bigram, s="lambda.1se")[-1])
+words.glmnet.bigram <- words.glmnet.bigram %>% filter(weight != 0) %>% arrange(desc(weight))
+write.csv(words.glmnet.bigram, file = file.path('pix', 'glmnet_bigrams.csv'))
 ```
 
 ## Classification trees
@@ -636,12 +657,6 @@ plotcp(reviews.rpart)
 # Tree with lowest cv error
 reviews.rpart.pruned <- prune(reviews.rpart, cp=0.0066)
 
-# View variable importance
-# The sum of the goodness of split measures for each split for which it was the primary variable
-# reviews.rpart.pruned$variable.importance
-# words.rpart.unigram <- t(bind_rows(as.list(reviews.rpart.pruned$variable.importance)))
-# write.csv(words.rpart.unigram, file = file.path('pix', 'rpart_unigrams.csv'))
-
 # Plot the tree
 # rpart.plot(reviews.rpart.pruned)
 # varlen=0: use full names.
@@ -660,6 +675,14 @@ reviews.rpart.pred <- predict(reviews.rpart.pruned,
 conf.mat.rpart <- table(labels[index.train], reviews.rpart.pred, dnn = c("actual", "predicted"))
 perf.rpart <- performance(conf.mat.rpart)
 perf.rpart %>% kable()
+```
+
+```{r rpart_word_analysis, eval=FALSE, include=FALSE}
+# View variable importance
+# The sum of the goodness of split measures for each split for which it was the primary variable
+# reviews.rpart.pruned$variable.importance
+words.rpart.unigram <- t(bind_rows(as.list(reviews.rpart.pruned$variable.importance)))
+write.csv(words.rpart.unigram, file = file.path('pix', 'rpart_unigrams.csv'))
 ```
 
 ### 6. Classification trees - Bigram
@@ -706,12 +729,6 @@ plotcp(reviews.rpart.bigram)
 # Tree with lowest cv error
 reviews.rpart.bigram.pruned <- prune(reviews.rpart.bigram, cp=0.016)
 
-# View variable importance
-# The sum of the goodness of split measures for each split for which it was the primary variable
-# reviews.rpart.bigram.pruned$variable.importance
-# words.rpart.bigram <- t(bind_rows(as.list(reviews.rpart.bigram.pruned$variable.importance)))
-# write.csv(words.rpart.bigram, file = file.path('pix', 'rpart_bigrams.csv'))
-
 # Plot the tree
 # rpart.plot(reviews.rpart.bigram.pruned)
 # varlen=0: use full names.
@@ -728,6 +745,14 @@ conf.mat.rpart.bigram <- table(labels[index.train], reviews.rpart.pred.bigram,
                                dnn = c("actual", "predicted"))
 perf.rpart.bigram <- performance(conf.mat.rpart.bigram)
 perf.rpart.bigram %>% kable()
+```
+
+```{r rpart_bigram_word_analysis, eval=FALSE, include=FALSE}
+# View variable importance
+# The sum of the goodness of split measures for each split for which it was the primary variable
+# reviews.rpart.bigram.pruned$variable.importance
+words.rpart.bigram <- t(bind_rows(as.list(reviews.rpart.bigram.pruned$variable.importance)))
+write.csv(words.rpart.bigram, file = file.path('pix', 'rpart_bigrams.csv'))
 ```
 
 ## Random forests
