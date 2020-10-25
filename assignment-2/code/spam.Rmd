@@ -363,7 +363,7 @@ df.mnb.topn %>%
   ylab("Percent")
 ```
 
-```{r mnb_top300_word_analysis, eval=FALSE, include=FALSE}
+```{r mnb_top300_word_analysis, echo=FALSE}
 # Select top-n mutual-information terms from total vocabularies
 index.top307 <- calculate_topn(train.dtm, topn = 307)
 # Select top-n mutual-information terms from frequent terms
@@ -373,7 +373,7 @@ index.top307.freq <- calculate_topn(train.dtm.freq, topn = 307)
 words.mnb.unigram <- t(bind_rows(index.top307[[2]], index.top307.freq[[2]]))
 colnames(words.mnb.unigram) <- c('Top-307 mutual info', 'Top-307 frequent')
 # Save to top307_unigrams.csv
-write.csv(words.mnb.unigram, file = file.path('pix', 'mnb_unigrams.csv'))
+# write.csv(words.mnb.unigram, file = file.path('pix', 'mnb_unigrams.csv'))
 
 # Print the partial result
 words.mnb.unigram[1:20,]
@@ -445,7 +445,7 @@ df.mnb.topn.bigram %>%
   ylab("Percent")
 ```
 
-```{r mnb_bigram_top300_word_analysis, eval=FALSE, include=FALSE}
+```{r mnb_bigram_top300_word_analysis, echo=FALSE}
 # Select top-n mutual-information terms from total vocabularies
 index.top356.bigram <- calculate_topn(train.dtm.bigram, topn = 356)
 # Select top-n mutual-information terms from frequent terms
@@ -455,7 +455,7 @@ index.top356.bigram.freq <- calculate_topn(train.dtm.bigram.freq, topn = 356)
 words.mnb.bigram <- t(bind_rows(index.top356.bigram[[2]], index.top356.bigram.freq[[2]]))
 colnames(words.mnb.bigram) <- c('Top-356 mutual info', 'Top-356 frequent')
 # Save to top307_unigrams.csv
-write.csv(words.mnb.bigram, file = file.path('pix', 'mnb_bigrams.csv'))
+# write.csv(words.mnb.bigram, file = file.path('pix', 'mnb_bigrams.csv'))
 
 # Print the partial result
 words.mnb.bigram[60:80,]
@@ -509,7 +509,7 @@ reviews.glmnet.pred <- predict(reviews.glmnet, newx=as.matrix(test.dtm.glmet),
                                type="class")
 
 # Confusion matrix
-conf.mat.glmnet <- table(labels[index.train], reviews.glmnet.pred, dnn = c("actual", "predicted"))
+conf.mat.glmnet <- table(labels[-index.train], reviews.glmnet.pred, dnn = c("actual", "predicted"))
 perf.glmnet <- performance(conf.mat.glmnet) 
 ```
 
@@ -517,12 +517,16 @@ perf.glmnet <- performance(conf.mat.glmnet)
 perf.glmnet %>% kable()
 ```
 
-```{r glmnet_word_analysis, eval=FALSE, include=FALSE}
+```{r glmnet_word_analysis, echo=FALSE}
 # coef(reviews.glmnet, s="lambda.1se")
 words.glmnet.unigram <- data.frame(term = rownames(as.matrix(coef(reviews.glmnet, s="lambda.1se")))[-1],
                                    weight = coef(reviews.glmnet, s="lambda.1se")[-1])
 words.glmnet.unigram <- words.glmnet.unigram %>% filter(weight != 0) %>% arrange(desc(weight))
-write.csv(words.glmnet.unigram, file = file.path('pix', 'glmnet_unigrams.csv'))
+# Save the words
+# write.csv(words.glmnet.unigram, file = file.path('pix', 'glmnet_unigrams.csv'))
+
+# Print the partial result
+words.glmnet.unigram[1:20,]
 ```
 
 ### 4. Regularized logistic regression - Bigram
@@ -557,12 +561,16 @@ perf.glmnet.bigram <- performance(conf.mat.glmnet.bigram)
 perf.glmnet.bigram %>% kable()
 ```
 
-```{r glmnet_word_analysis, eval=FALSE, include=FALSE}
+```{r glmnet_word_analysis_bigram, echo=FALSE}
 # coef(reviews.glmnet, s="lambda.1se")
 words.glmnet.bigram <- data.frame(term = rownames(as.matrix(coef(reviews.glmnet.bigram, s="lambda.1se")))[-1],
                                   weight = coef(reviews.glmnet.bigram, s="lambda.1se")[-1])
 words.glmnet.bigram <- words.glmnet.bigram %>% filter(weight != 0) %>% arrange(desc(weight))
-write.csv(words.glmnet.bigram, file = file.path('pix', 'glmnet_bigrams.csv'))
+# Save the words
+# write.csv(words.glmnet.bigram, file = file.path('pix', 'glmnet_bigrams.csv'))
+
+# Print the partial result
+words.glmnet.bigram[1:20,]
 ```
 
 ## Classification trees
@@ -677,12 +685,17 @@ perf.rpart <- performance(conf.mat.rpart)
 perf.rpart %>% kable()
 ```
 
-```{r rpart_word_analysis, eval=FALSE, include=FALSE}
+```{r rpart_word_analysis, echo=FALSE}
 # View variable importance
 # The sum of the goodness of split measures for each split for which it was the primary variable
 # reviews.rpart.pruned$variable.importance
 words.rpart.unigram <- t(bind_rows(as.list(reviews.rpart.pruned$variable.importance)))
-write.csv(words.rpart.unigram, file = file.path('pix', 'rpart_unigrams.csv'))
+colnames(words.rpart.unigram) <- c("variable importance")
+# Save the words
+# write.csv(words.rpart.unigram, file = file.path('pix', 'rpart_unigrams.csv'))
+
+# Print the partial result
+words.rpart.unigram[1:20,]
 ```
 
 ### 6. Classification trees - Bigram
@@ -727,7 +740,7 @@ plotcp(reviews.rpart.bigram)
 # printcp(reviews.rpart.bigram)
 
 # Tree with lowest cv error
-reviews.rpart.bigram.pruned <- prune(reviews.rpart.bigram, cp=0.016)
+reviews.rpart.bigram.pruned <- prune(reviews.rpart.bigram, cp=0)
 
 # Plot the tree
 # rpart.plot(reviews.rpart.bigram.pruned)
@@ -747,19 +760,24 @@ perf.rpart.bigram <- performance(conf.mat.rpart.bigram)
 perf.rpart.bigram %>% kable()
 ```
 
-```{r rpart_bigram_word_analysis, eval=FALSE, include=FALSE}
+```{r rpart_bigram_word_analysis, echo=FALSE}
 # View variable importance
 # The sum of the goodness of split measures for each split for which it was the primary variable
 # reviews.rpart.bigram.pruned$variable.importance
 words.rpart.bigram <- t(bind_rows(as.list(reviews.rpart.bigram.pruned$variable.importance)))
-write.csv(words.rpart.bigram, file = file.path('pix', 'rpart_bigrams.csv'))
+colnames(words.rpart.bigram) <- c("variable importance")
+# Save the words
+# write.csv(words.rpart.bigram, file = file.path('pix', 'rpart_bigrams.csv'))
+
+# Print the partial result
+words.rpart.bigram[1:20,]
 ```
 
 ## Random forests
 
 ### 7. Random forests - Unigram
 
-```{r classifier_rf, include=FALSE}
+```{r classifier_rf, echo=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
 train.dtm.rf <- calculate_cv(train.dtm, 500, NA, NA)
@@ -795,9 +813,6 @@ reviews.rf
 # Confusion matrix
 conf.mat.rf <- reviews.rf$confusion
 perf.rf <-performance(conf.mat.rf) 
-```
-
-```{r rf_perf, echo=FALSE}
 perf.rf %>% kable()
 ```
 
@@ -833,7 +848,7 @@ perf.rf <-performance(conf.mat.rf)
 
 ### 8. Random forests - Bigram
 
-```{r classifier_rf_bigram, include=FALSE}
+```{r classifier_rf_bigram, echo=FALSE}
 # hyper-parameter: feature selection
 # the best option: ???
 train.dtm.rf.bigram <- calculate_cv(train.dtm.bigram, 2000, NA, NA)
@@ -855,9 +870,6 @@ reviews.rf.bigram
 # Confusion matrix
 conf.mat.rf.bigram <- reviews.rf.bigram$confusion
 perf.rf.bigram <-performance(conf.mat.rf.bigram) 
-```
-
-```{r rf_bigram_perf, echo=FALSE}
 perf.rf.bigram %>% kable()
 ```
 
