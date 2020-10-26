@@ -11,32 +11,27 @@ output:
 library(tidyverse)
 library(tm)
 library(knitr)
+library(kableExtra)
 library(glmnet)
 library(randomForest)
 library(SnowballC)
 library(broom)
 library(NLP)
+library(coefplot)
+library(DT)
+library(ggfortify)
+library(cowplot)
 
 knitr::opts_chunk$set(echo = TRUE)
+
+
+theme_set(theme_bw())
 
 ```
 
 # TO DO
 
-- How to best handle sparsity in dtm?
-- Normalise data before training
-  - Check if necessary: https://stats.stackexchange.com/questions/29781/when-conducting-multiple-regression-when-should-you-center-your-predictor-varia
-- Cross-validate/choose random forest parameters 
-  - ntree
-  - mtry
-- Visualise more of the results
-- Write more explanations, figure captions, table captions, etcetera
-  - figure captions are done in the chunk-header
-  - kable captions are done in the 'kable()' function. 
-  - Latex code can be used for references and labels
-    - for the tables: https://stackoverflow.com/questions/54082814/adding-label-in-kable-kableextra-latex-output
-    - for the figures: https://cran.r-project.org/web/packages/officedown/vignettes/captions.html
-- Add analyses of a bi-grams dtm
+- Comparison of results
 
 # 0. Pre-processing
 
@@ -50,20 +45,21 @@ df <- NULL
 file_names <-
   list.files(path = "negative_polarity", recursive = T)
 
-for (name in file_names)
+for (name in file_names) {
   df <- bind_rows(df,
-    list(label = as.numeric(str_detect(name, "deceptive")), # 1 for deceptive and 0 for truthful
-      fold = as.numeric(str_extract(name, pattern = regex('\\d'))),
+    list(fold = as.numeric(str_extract(name, pattern = regex('\\d'))),
       hotel = str_extract(name, pattern = regex('[a-z]*_\\d+')),
-      review = read_file(str_c("negative_polarity/", name))
+      review = read_file(str_c("negative_polarity/", name)),
+      label = as.numeric(str_detect(name, "deceptive")) # 1 for deceptive and 0 for truthful
     )
   )
+}
 
 df <- df %>%
   mutate(id = as.numeric(str_extract(hotel, pattern = regex('\\d+'))),
          hotel = str_extract(hotel, pattern = regex('[a-z]*'))
-         )
-
+         ) %>%
+  arrange(fold)
 
 head(df, 2) %>%
   kable()
@@ -135,9 +131,12 @@ labels[c(1:10, 790:800)]
 
 ```{r train_test_split_uni}
 
-set.seed(123)
+# training data does not have to be sampled at random
+# set.seed(123)
 
-train_ind <- sample(1:nrow(df), size = nrow(df)*0.75)
+#train_ind <- sample(1:nrow(df), size = nrow(df)*0.75)
+
+train_ind <- 1:640
 
 train_dtm <- as.matrix(dtm)[train_ind,]
 train_labels <- labels[train_ind]
@@ -145,6 +144,31 @@ train_labels <- labels[train_ind]
 test_dtm <- as.matrix(dtm)[-train_ind,]
 test_labels <- labels[-train_ind]
 
+df[train_ind, "set"] <- "train"
+df[-train_ind, "set"] <- "test"
+
+ggplot(df, aes(set, fill = labels)) +
+  geom_bar(position = "fill")
+
+
+
+```
+
+```{r}
+
+# Info per hotel, not so relevant
+
+# ggplot(df, aes(hotel, fill = as.factor(label))) +
+#   geom_bar() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 
+# ggplot(df, aes(hotel, fill = set)) +
+#   geom_bar() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 
+# ggplot(df[train_ind,], aes(hotel, fill = as.factor(label))) +
+#   geom_bar(position = "fill") +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 ```
 
@@ -153,10 +177,8 @@ test_labels <- labels[-train_ind]
 ```{r train_test_split_bi}
 
 train_dtm2 <- as.matrix(dtm2)[train_ind,]
-train_labels <- labels[train_ind]
 
 test_dtm2 <- as.matrix(dtm2)[-train_ind,]
-test_labels <- labels[-train_ind]
 
 ```
 
@@ -231,6 +253,21 @@ predicted_mnb <- predict.mnb(mnb_model, test_dtm)
 ## Confusion matrix
 
 ```{r confusion_mnb}
+
+test_preds_mnb <- tibble(review_type = ifelse(test_labels==1,"deceptive","truthful"),
+                     prediction = ifelse(predicted_mnb==1, "deceptive", "truthful"),
+                     correct = ifelse(review_type == prediction, "1", "0")) %>%
+  rowid_to_column("document") 
+
+ggplot(test_preds_mnb, aes(document, prediction, colour = correct)) +
+  geom_point(shape = 3, size = 4)# +
+  #facet_grid(~review_type, scales = "free")
+
+ggplot(test_preds_mnb, aes(prediction, fill = correct)) +
+  geom_bar(position = "fill")
+
+ggplot(test_preds_mnb, aes(review_type, fill = correct)) +
+  geom_bar(position = "fill")
 
 conf_mnb <- table(test_labels, predicted_mnb)
 
@@ -307,51 +344,92 @@ A logistic regeression model uses the information from the document term matrix 
 # Use LASSO (penalising for number of parameters)
 # Determine lambda by means of cross validation
 
-set.seed(1)
+cv_lasso <- cv.glmnet(train_dtm, train_labels, alpha = 1, family = "binomial", type.measure="class")
 
-cv_lasso <- cv.glmnet(train_dtm, train_labels, alpha = 1, family = "binomial")
-
-plot(cv_lasso)
+lambda_uni <- plot(cv_lasso)
 
 coefs <- as.data.frame(as.matrix(coef(cv_lasso, s="lambda.1se"))) %>%
   rownames_to_column(var = "term") %>%
   rename(coefficient = `1`) %>%
   filter(coefficient != 0)
 
-coefs %>% head(10) %>% kable()
+top10coef <- coefs %>% 
+  filter(term != "(Intercept)") %>% 
+  arrange(desc(abs(coefficient))) %>% 
+  head(10) %>%
+  mutate(probability = exp(coefficient)/(exp(coefficient)+1))
 
-sqrt(diag(vcov(model_glm)))
+top10coef %>%
+  kable()
 
 
 ```
 
 ### Train
 
-```{r train_glm}
+```{r train_glm, fig.height=10}
 
 model_glm <- glmnet(train_dtm, train_labels, alpha = 1, family = "binomial", 
-                    lambda = cv_lasso$lambda.1se) # I choose the largest lambda within 1se from the smallest lambda
+                    lambda = cv_lasso$lambda.1se, type.measure="class") # I choose the largest lambda within 1se from the smallest lambda
+
+coefplot(model_glm, lambda=cv_lasso$lambda.1se, sort='magnitude', cex=100)
+
 
 ```
 
 ### Predict
 
-```{r predict_glm}
+```{r predict_glm, fig.width = 10}
 
 #test_dtm_glm <- model.matrix(test_labels ~ test_dtm)[,-1]
 
-probabilities_glm <- predict(model_glm, 
+predicted_glm <- predict(model_glm, 
                              newx = test_dtm, 
-                             type = "response", # Type "response" gives the fitted probabilities for "binomial"
+                             type = "class", # Type "response" gives the fitted probabilities for "binomial"
                              s= cv_lasso$lambda.1se)
 
-predicted_glm <- ifelse(probabilities_glm > 0.5, 1, 0)
+
+```
+
+```{r}
+
+# Information about hotels and wrong predictions
+
+# wrong_reviews <- df[-train_ind,] %>%
+#   filter(test_preds[["correct"]]==0)
+# 
+# wrong_reviews <- as.data.frame(test_dtm[test_preds[["correct"]]==0,]) %>%
+#   gather(key = "word", value = "count") %>%
+#   group_by(word) %>%
+#   summarise(n = sum(count))
+# 
+# per_hotel <- df[-train_ind,] %>%
+#   mutate(correct = test_preds[["correct"]]==1)
+# 
+# ggplot(per_hotel, aes(hotel, fill = correct)) +
+#   geom_bar() + 
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 ```
 
 ### Confusion matrix
 
 ```{r confusion_glm}
+
+test_preds <- tibble(review_type = ifelse(test_labels==1,"deceptive","truthful"),
+                     prediction = ifelse(predicted_glm==1, "deceptive", "truthful"),
+                     correct = ifelse(review_type == prediction, "1", "0")) %>%
+  rowid_to_column("document") 
+
+ggplot(test_preds, aes(document, prediction, colour = correct)) +
+  geom_point(shape = 3, size = 4)# +
+  #facet_grid(~review_type, scales = "free")
+
+prec <- ggplot(test_preds, aes(prediction, fill = correct)) +
+  geom_bar(position = "fill")
+
+recall <- ggplot(test_preds, aes(review_type, fill = correct)) +
+  geom_bar(position = "fill")
 
 conf_glm <- table(test_labels, predicted_glm)
 
@@ -379,18 +457,22 @@ perf_glm %>% kable()
 # Use LASSO (penalising for number of parameters)
 # Determine lambda by means of cross validation
 
-set.seed(1)
+cv_lasso2 <- cv.glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial", type.measure = "class")
 
-cv_lasso <- cv.glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial")
+lambda_bi <-plot(cv_lasso2)
 
-plot(cv_lasso)
-
-coefs <- as.data.frame(as.matrix(coef(cv_lasso, s="lambda.1se"))) %>%
+coefs2 <- as.data.frame(as.matrix(coef(cv_lasso2, s="lambda.1se"))) %>%
   rownames_to_column(var = "term") %>%
   rename(coefficient = `1`) %>%
   filter(coefficient != 0)
 
-coefs %>% head(10) %>% kable()
+top10coef2 <- coefs2 %>%
+  arrange(desc(abs(coefficient))) %>% 
+  head(10) %>% 
+  mutate(probability = exp(coefficient)/(exp(coefficient)+1)) 
+
+top10coef2 %>%
+  kable()
 
 ```
 
@@ -398,8 +480,8 @@ coefs %>% head(10) %>% kable()
 
 ```{r train_glm2}
 
-model_glm <- glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial", 
-                    lambda = cv_lasso$lambda.1se) # I choose the largest lambda within 1se from the smallest lambda
+model_glm2 <- glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial", 
+                    lambda = cv_lasso2$lambda.1se) # I choose the largest lambda within 1se from the smallest lambda
 
 
 ```
@@ -410,12 +492,11 @@ model_glm <- glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial",
 
 #test_dtm_glm <- model.matrix(test_labels ~ test_dtm)[,-1]
 
-probabilities_glm <- predict(model_glm, 
+predicted_glm2 <- predict(model_glm2, 
                              newx = test_dtm2, 
-                             type = "response", # Type "response" gives the fitted probabilities for "binomial"
-                             s= cv_lasso$lambda.1se)
+                             type = "class", # Type "response" gives the fitted probabilities for "binomial"
+                             s= cv_lasso2$lambda.1se)
 
-predicted_glm <- ifelse(probabilities_glm > 0.5, 1, 0)
 
 ```
 
@@ -423,9 +504,26 @@ predicted_glm <- ifelse(probabilities_glm > 0.5, 1, 0)
 
 ```{r confusion_glm2}
 
-conf_glm <- table(test_labels, predicted_glm)
+test_preds2 <- tibble(review_type = ifelse(test_labels==1,"deceptive","truthful"),
+                     prediction = ifelse(predicted_glm2==1, "deceptive", "truthful"),
+                     correct = ifelse(review_type == prediction, "1", "0")) %>%
+  rowid_to_column("document") 
 
-conf_glm
+wrong_reviews <- df[-train_ind,] %>%
+  filter(test_preds2[["correct"]]==0)
+
+ggplot(test_preds2, aes(document, prediction, colour = correct)) +
+  geom_point(shape = 3, size = 4)
+
+prec2 <- ggplot(test_preds2, aes(prediction, fill = correct)) +
+  geom_bar(position = "fill")
+
+recall2 <- ggplot(test_preds2, aes(review_type, fill = correct)) +
+  geom_bar(position = "fill")
+
+conf_glm2 <- table(test_labels, predicted_glm2)
+
+conf_glm2 
 
 ```
 
@@ -434,9 +532,69 @@ conf_glm
 
 ```{r performance_glm2}
 
-perf_glm2 <- performance(conf_glm)
+perf_glm2 <- performance(conf_glm2)
 
 perf_glm2 %>% kable()
+
+```
+
+# Comparison logistic regression models
+
+## Lambda plots
+
+```{r}
+
+tidied_cv <- tidy(cv_lasso) %>% rename(MSE = estimate)
+tidied_cv2 <- tidy(cv_lasso2) %>% rename(MSE = estimate)
+
+# plot of MSE as a function of lambda
+l_cv<-ggplot(tidied_cv, aes(log(lambda), MSE)) +
+  geom_point(colour = "red") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), alpha = .25) +
+  geom_vline(xintercept = log(cv_lasso$lambda.min)) +
+  geom_vline(xintercept = log(cv_lasso$lambda.1se), lty = 2) +
+  ggtitle("Unigram")
+
+l_cv2<-ggplot(tidied_cv2, aes(log(lambda), MSE)) +
+  geom_point(colour = "red") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), alpha = .25) +
+  geom_vline(xintercept = log(cv_lasso$lambda.min)) +
+  geom_vline(xintercept = log(cv_lasso$lambda.1se), lty = 2) +
+  ggtitle("Bigram")
+
+ggsave(plot_grid(l_cv, l_cv2), filename = "cv_lambda.png", width = 9, height = 3)
+
+```
+
+## Coefficient tables
+
+```{r}
+
+top10coef %>% kable(format = "latex")
+
+top10coef2 %>% kable(format = "latex") 
+
+```
+
+## Confusion matrix plots
+
+```{r}
+
+ggsave(plot_grid(prec, recall, prec2, recall2), filename = "conf_plots.png", height = 4)
+
+```
+
+## Performance
+
+```{r}
+
+compare_glms <- tibble(metric = perf_mnb[["metric"]],
+                       glm = perf_glm[["value"]],
+                       glm2 = perf_glm2[["value"]]) %>%
+  filter(metric %in% c("precision", "neg predictive value", "recall", "selectivity", "accuracy"))
+
+compare_glms %>% kable(format = "latex")
+
 
 ```
 
@@ -463,6 +621,21 @@ predicted_tree <- predict(model_tree, test_dtm, type = "response")
 ## Confusion matrix 
 
 ```{r conf_tree}
+
+test_preds_tree <- tibble(review_type = ifelse(test_labels==1,"deceptive","truthful"),
+                     prediction = ifelse(predicted_tree==1, "deceptive", "truthful"),
+                     correct = ifelse(review_type == prediction, "1", "0")) %>%
+  rowid_to_column("document") 
+
+wrong_reviews <- df[-train_ind,] %>%
+  filter(test_preds_tree[["correct"]]==0)
+
+ggplot(test_preds_tree, aes(document, prediction, colour = correct)) +
+  geom_point(shape = 3, size = 4)# +
+  #facet_grid(~review_type, scales = "free")
+
+ggplot(test_preds_tree, aes(prediction, fill = correct)) +
+  geom_bar(position = "fill")
 
 conf_tree <- table(test_labels, predicted_tree)
 
@@ -502,6 +675,21 @@ predicted_random <- predict(model_random, test_dtm, type = "response")
 ## Confusion matrix 
 
 ```{r conf_random}
+
+test_preds_random <- tibble(review_type = ifelse(test_labels==1,"deceptive","truthful"),
+                     prediction = ifelse(predicted_random==1, "deceptive", "truthful"),
+                     correct = ifelse(review_type == prediction, "1", "0")) %>%
+  rowid_to_column("document") 
+
+wrong_reviews <- df[-train_ind,] %>%
+  filter(test_preds_random[["correct"]]==0)
+
+ggplot(test_preds_random, aes(document, prediction, colour = correct)) +
+  geom_point(shape = 3, size = 4)# +
+  #facet_grid(~review_type, scales = "free")
+
+ggplot(test_preds_random, aes(prediction, fill = correct)) +
+  geom_bar(position = "fill")
 
 conf_random <- table(test_labels, predicted_random)
 
