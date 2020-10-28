@@ -913,13 +913,12 @@ perf_tree %>% kable()
 ###select mtry value
 
 ```{r}
-
-
 #select different values using the method described in the report
-ntreeTry = 2600
-stepFactor = 1.215
-improve = 0.03125
-mtry = 38
+ntreeTry = 100
+stepFactor = 5.12
+improve = 0.001
+
+mtry = 9
 
 
 #run and notate results
@@ -932,15 +931,14 @@ model_random <- tuneRF (x = train_dtm, y = train_labels, mtry = mtry, ntreeTry =
 nodelist <- c()
 
 #check if mtry is indeed the chosen mtry
-mtry = 6
+mtry = 9
+ntreeTry = 50
 
 #select a range for i for minimal size of terminal nodes
-for (i in 0: 3){
+for (i in 1: 1000){
   model_random <- randomForest(x = train_dtm, y = train_labels, mtry = mtry, nodesize = i, ntree = ntreeTry, importance = TRUE, do.trace = FALSE)
   
   #select the out of bag score after all trees have run 
-  #TODO: check if this is the average, not a single value! 
-  
   nodelist <- c(nodelist, model_random$err.rate[ntreeTry,1])
   print(i)
   print(model_random$err.rate[ntreeTry,1])
@@ -951,14 +949,14 @@ nodelist
 #Create a plot of the data gathered
 nodeplot <- tibble(OOB = nodelist) %>%
   rowid_to_column("nodesize") %>%
-  ggplot(aes(nodesize + 7, OOB)) +
+  ggplot(aes(nodesize, OOB)) +
   geom_point() +
   geom_line()
 
 nodeplot
 
 
-#now choose a value for nodesize by hand
+#now select the best nodesize value
 ```
 
 
@@ -966,7 +964,8 @@ nodeplot
 
 ```{r}
 #Check if nodesize is indeed the chosen nodesize
-nodesize = 10 
+nodesize = 63
+ntreeTry = 2000
 
 #Train the model with the chosen values on the unigram dataset
 model_random <- randomForest(x = train_dtm, y = train_labels, mtry = mtry, nodesize = nodesize, ntree = ntreeTry, importance = TRUE, do.trace = TRUE)
@@ -1009,14 +1008,14 @@ perf_random %>% kable()
 
 
 #select different values using the method described in the report
-ntreeTry2 = 2000
-stepFactor2 = 1.215
-improve2 = 0.03125
-mtry2 = 38
+ntreeTry2 = 100
+stepFactor2 = 33.34
+improve2 = 0.001
+mtry2 = 3
 
 
 #run and notate results
-#model_random2 <- tuneRF (x = train_dtm2, y = train_labels, mtry = mtry2, ntreeTry = ntreeTry2, stepFactor = stepFactor2, improve= improve2, trace = TRUE, plot = TRUE, doBest = FALSE)
+model_random2 <- tuneRF (x = train_dtm2, y = train_labels, mtry = mtry2, ntreeTry = ntreeTry2, stepFactor = stepFactor2, improve= improve2, trace = TRUE, plot = TRUE, doBest = FALSE)
 
 ```
 
@@ -1025,14 +1024,14 @@ mtry2 = 38
 nodelist2 <- c()
 
 #check if mtry is indeed the chosen mtry
-mtry2 = 4
+mtry2 = 3
+ntreeTry2 = 20
 
 #select a range for i for minimal size of terminal nodes
-for (i in 0: 3){
+for (i in 1: 1000){
   model_random2 <- randomForest(x = train_dtm2, y = train_labels, mtry = mtry2, nodesize = i, ntree = ntreeTry2, importance = TRUE, do.trace = FALSE)
   
   #select the out of bag score after all trees have run 
-  #TODO: check if this is the average, not a single value! 
   
   nodelist2 <- c(nodelist2, model_random2$err.rate[ntreeTry2,1])
   print(i)
@@ -1059,7 +1058,8 @@ nodeplot2
 
 ```{r}
 #Check if nodesize is indeed the chosen nodesize
-nodesize2 = 4 
+nodesize2 = 125 
+ntreeTry2 = 100
 
 #Train the model with the chosen values on the unigram dataset
 model_random2 <- randomForest(x = train_dtm2, y = train_labels, mtry = mtry2, nodesize = nodesize2, ntree = ntreeTry2, importance = TRUE, do.trace = TRUE, keep.forest = TRUE)
@@ -1072,9 +1072,7 @@ model_random2 <- randomForest(x = train_dtm2, y = train_labels, mtry = mtry2, no
 
 ```{r predict_random}
 
-
-#TODO this still gives an error
-predicted_random2 <- predict(model_random2, test_dtm, type = "response")
+predicted_random2 <- predict(model_random2, test_dtm2, type = "response")
 
 ```
 
