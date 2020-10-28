@@ -908,55 +908,82 @@ perf_tree %>% kable()
 
 # 4. Random forests (flexible classifier)
 
-```{r train_random}
+##unigram
 
-# TO DO: cross validate for mtry & treesize
-#check that the labels are regarded as factors. This way classificition is used instead of the regression funcitonality
-train_labels <-as.factor(train_labels)
-#set the parameters for the tune RF function
-#TODO: tune these variables
-#this should be high enough, it takes up quite some computational power. After tuning: test if it can be lower.
-ntreeTry = 1500
-#choose stepFactor 1.4: the lowest value with more than 1 result (most fine-grained search)
-#???? what about 77?
-#create a matrix to optimize the stepfactor and improve values
-tune_matrix <- matrix(0, nrow = 100, ncol = 10)
-#loop through the ranges of both values
-for (i in 1: 10)
-  for(j in 1 : 5)
-    #stepFactor = 1.4
-    stepFactor = i
-    #improve = 0.0005
-    improve = j
-    #perform the tuneRF function to find the optimal mtry
-    #model_random <- tuneRF (x = train_dtm, y = train_labels, ntreeTry = ntreeTry, stepFactor = stepFactor, improve= improve, trace = FALSE, plot = FALSE, doBest = FALSE)
-    
-    #add the lowest OOB score to the matrix
-    #find out how to do this
-    tune_matrix[i,j] <- i; tune_matrix 
-    #min(trace())
-    
-print(tune_matrix)    
-stepFactor = 1.5
-improve = 0.05
-#model_random <- tuneRF (x = train_dtm, y = train_labels, ntreeTry = ntreeTry, stepFactor = stepFactor, improve= improve, trace = TRUE, plot = TRUE, doBest = TRUE)
-    
-    
-#TO DO: tune the treesize for optimal results
+###select mtry value
+
+```{r}
+
+
+#select different values using the method described in the report
+ntreeTry = 2600
+stepFactor = 1.215
+improve = 0.03125
+mtry = 38
+
+
+#run and notate results
+model_random <- tuneRF (x = train_dtm, y = train_labels, mtry = mtry, ntreeTry = ntreeTry, stepFactor = stepFactor, improve= improve, trace = TRUE, plot = TRUE, doBest = FALSE)
 
 ```
 
-## Predict
+###select nodesize
+```{r}
+nodelist <- c()
+
+#check if mtry is indeed the chosen mtry
+mtry = 6
+
+#select a range for i for minimal size of terminal nodes
+for (i in 0: 3){
+  model_random <- randomForest(x = train_dtm, y = train_labels, mtry = mtry, nodesize = i, ntree = ntreeTry, importance = TRUE, do.trace = FALSE)
+  
+  #select the out of bag score after all trees have run 
+  #TODO: check if this is the average, not a single value! 
+  
+  nodelist <- c(nodelist, model_random$err.rate[ntreeTry,1])
+  print(i)
+  print(model_random$err.rate[ntreeTry,1])
+}
+
+nodelist
+
+#Create a plot of the data gathered
+nodeplot <- tibble(OOB = nodelist) %>%
+  rowid_to_column("nodesize") %>%
+  ggplot(aes(nodesize + 7, OOB)) +
+  geom_point() +
+  geom_line()
+
+nodeplot
+
+
+#now choose a value for nodesize by hand
+```
+
+
+###train
+
+```{r}
+#Check if nodesize is indeed the chosen nodesize
+nodesize = 10 
+
+#Train the model with the chosen values on the unigram dataset
+model_random <- randomForest(x = train_dtm, y = train_labels, mtry = mtry, nodesize = nodesize, ntree = ntreeTry, importance = TRUE, do.trace = TRUE)
+
+
+```
+
+
+### Predict
 
 ```{r predict_random}
 
-#dit was probabilities_random
 predicted_random <- predict(model_random, test_dtm, type = "response")
-#predicted_random <- ifelse(probabilities_random > 0.5, 1, 0)
 
 ```
 
-## Confusion matrix 
+### Confusion matrix 
 
 ```{r conf_random}
 
@@ -965,7 +992,102 @@ conf_random
 
 ```
 
-## Performance metrics
+### Performance metrics
+
+```{r performance_random}
+
+perf_random <- performance(conf_random)
+perf_random %>% kable()
+
+```
+
+
+##bigram
+###select mtry value
+
+```{r}
+
+
+#select different values using the method described in the report
+ntreeTry2 = 2000
+stepFactor2 = 1.215
+improve2 = 0.03125
+mtry2 = 38
+
+
+#run and notate results
+#model_random2 <- tuneRF (x = train_dtm2, y = train_labels, mtry = mtry2, ntreeTry = ntreeTry2, stepFactor = stepFactor2, improve= improve2, trace = TRUE, plot = TRUE, doBest = FALSE)
+
+```
+
+###select nodesize
+```{r}
+nodelist2 <- c()
+
+#check if mtry is indeed the chosen mtry
+mtry2 = 4
+
+#select a range for i for minimal size of terminal nodes
+for (i in 0: 3){
+  model_random2 <- randomForest(x = train_dtm2, y = train_labels, mtry = mtry2, nodesize = i, ntree = ntreeTry2, importance = TRUE, do.trace = FALSE)
+  
+  #select the out of bag score after all trees have run 
+  #TODO: check if this is the average, not a single value! 
+  
+  nodelist2 <- c(nodelist2, model_random2$err.rate[ntreeTry2,1])
+  print(i)
+  print(model_random2$err.rate[ntreeTry2,1])
+}
+
+nodelist2
+
+#Create a plot of the data gathered
+nodeplot2 <- tibble(OOB = nodelist2) %>%
+  rowid_to_column("nodesize") %>%
+  ggplot(aes(nodesize, OOB)) +
+  geom_point() +
+  geom_line()
+
+nodeplot2
+
+
+#now choose a value for nodesize by hand
+```
+
+
+###train
+
+```{r}
+#Check if nodesize is indeed the chosen nodesize
+nodesize2 = 4 
+
+#Train the model with the chosen values on the unigram dataset
+model_random2 <- randomForest(x = train_dtm2, y = train_labels, mtry = mtry2, nodesize = nodesize2, ntree = ntreeTry2, importance = TRUE, do.trace = TRUE, keep.forest = TRUE)
+
+
+```
+
+
+### Predict
+
+```{r predict_random}
+
+
+#TODO this still gives an error
+predicted_random2 <- predict(model_random2, test_dtm, type = "response")
+
+```
+
+### Confusion matrix 
+
+```{r conf_random}
+
+conf_random <- table(test_labels, predicted_random2)
+conf_random
+
+```
+
+### Performance metrics
 
 ```{r performance_random}
 
