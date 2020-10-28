@@ -75,10 +75,10 @@ head(df, 2) %>%
 
 corpus <- VCorpus(VectorSource(df[["review"]])) %>%
   tm_map(., content_transformer(tolower)) %>% # no capital letters
-  tm_map(., stripWhitespace) %>% # remove extra white space
-  tm_map(., removeWords, stopwords("english")) %>% # remove stopwords
+  tm_map(., removePunctuation) %>% # Remove punctuation
   tm_map(., stemDocument) %>% # stem words
-  tm_map(., removePunctuation)
+  tm_map(., removeWords, stopwords("english")) %>% # remove stopwords
+  tm_map(., stripWhitespace) # remove extra white space
 
 ```
 
