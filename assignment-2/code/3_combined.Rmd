@@ -131,7 +131,7 @@ performance <- function(confusion_matrix){
 
 ```
 
-### Mutual information top n function
+## Mutual information top n function
 
 ```{r}
 
@@ -186,7 +186,7 @@ train_labels <- labels[index.train]
 
 # Test document-term matrix
 test_dtm <- DocumentTermMatrix(reviews.all[-index.train], 
-                               list(dictionary = dimnames(train_dtm)[[2]]))
+                               list(dictionary = as.list(dimnames(train_dtm)[[2]])))
 # Test labels
 test_labels <- labels[-index.train]
 
@@ -208,11 +208,13 @@ train_dtm2 <- DocumentTermMatrix(reviews.all[index.train],
 
 # Test document-term matrix for bigrams
 test_dtm2 <- DocumentTermMatrix(reviews.all[-index.train], 
-                                      list(dictionary = dimnames(train_dtm2)[[2]]))
+                                      list(dictionary = as.list(dimnames(train_dtm2)[[2]])))
 
 ```
 
 #### Analysis of training and test bigrams
+
+##### Common bigrams
 
 ```{r train_test_split_bi_analysis, eval=FALSE, include=FALSE}
 
@@ -243,6 +245,43 @@ for (test_term in test_bigrams) {
 
 ```
 
+##### Dictionary parameter
+
+```{r dict_param, eval=FALSE, include=FALSE}
+
+# this is the actual review from reviews.all[c(321)]
+text_one_review <- read_file(file.path(file.path("data", "op_spam_v1.4", "negative_polarity", 
+                                      "deceptive_from_MTurk", "fold5", "d_allegro_1.txt")))
+
+# the bigrams which should exist!!!
+dict <- c("actually asked", "bags room", "bell hop")
+print("actually asked" %in% dimnames(train_dtm2)[[2]])
+print("bags room" %in% dimnames(train_dtm2)[[2]])
+print("bell hop" %in% dimnames(train_dtm2)[[2]])
+
+# bigram dictionary
+mat_one_review_bi <- DocumentTermMatrix(reviews.all[c(321)],
+                                     list(dictionary = dict))
+
+# bigram exist?
+sum(as.matrix(mat_one_review_bi))
+
+# unigram dictionary
+mat_one_review_uni <- DocumentTermMatrix(reviews.all[c(321)],
+                                     list(dictionary = c("actually", "asked")))
+
+# bigram exist?
+sum(as.matrix(mat_one_review_uni))
+
+
+# double check: this is the matrix for text_one_review by printing below matrix
+as.matrix(mat_one_review)
+
+# overall test with the training vocabularies
+# mat_one_review <- DocumentTermMatrix(reviews.all[c(321)],
+#                                      list(dictionary = as.list(dimnames(train_dtm2)[[2]])))
+```
+
 ## Get word frequency matrix
 
 ### Unigrams
@@ -254,7 +293,7 @@ for (test_term in test_bigrams) {
 train_dtm_freq <- removeSparseTerms(train_dtm, 0.95)
 # Test document-term matrix
 test_dtm_freq <- DocumentTermMatrix(reviews.all[-index.train], 
-                                    list(dictionary = dimnames(train_dtm_freq)[[2]]))
+                                    list(dictionary = as.list(dimnames(train_dtm_freq)[[2]])))
 
 ```
 
@@ -266,7 +305,7 @@ test_dtm_freq <- DocumentTermMatrix(reviews.all[-index.train],
 train_dtm2_freq <- removeSparseTerms(train_dtm2, 0.99)
 # Test document-term matrix for bigrams
 test_dtm2_freq <- DocumentTermMatrix(reviews.all[-index.train], 
-                                           list(dictionary = dimnames(train_dtm2_freq)[[2]]))
+                                           list(dictionary = as.list(dimnames(train_dtm2_freq)[[2]])))
 
 ```
 
