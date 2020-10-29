@@ -280,6 +280,7 @@ as.matrix(mat_one_review)
 # overall test with the training vocabularies
 # mat_one_review <- DocumentTermMatrix(reviews.all[c(321)],
 #                                      list(dictionary = as.list(dimnames(train_dtm2)[[2]])))
+
 ```
 
 ## Get word frequency matrix
