@@ -194,6 +194,71 @@ test_labels <- labels[-index.train]
 
 ### Bigrams
 
+#### Functions to create bigram test dataset
+
+```{r fun_bigram_test}
+# Workaround
+
+gen_bigram_test <- function(train_dtm, test_dtm_tmp) {
+  
+  # Matrix of train_dtm
+  train_dtm_mat <- as.matrix(train_dtm)
+  
+  # Matrix of test_dtm_tmp
+  test_dtm_mat_tmp <- as.matrix(test_dtm_tmp)
+  
+  # Final matrix of test_dtm to be returned
+  test_dtm_mat <- matrix(data = NA, nrow = dim(test_dtm_mat_tmp)[1], ncol = dim(train_dtm_mat)[2])
+  
+  # Iterate through all the rows in the final test_dtm dataset to be filled in with 1 or 0
+  for(row_index in c(1: dim(test_dtm_mat_tmp)[1])) {
+    
+    # Reset to the beginning of each row
+    term_index <- 0
+  
+    # Iterate through all the terms in one row to be filled in with 1 or 0
+    for(train_term in colnames(train_dtm_mat)) {
+      
+      # Record the term index in train_dtm2 dataset
+      term_index <- term_index + 1
+      
+      # If the term exists in the test bigrams
+      if(train_term %in% colnames(test_dtm_mat_tmp)) {
+        
+        # AND the term exists in the test review's comment
+        if(test_dtm_mat_tmp[row_index, train_term] == 1) {
+          # Label the term as 1 for existence
+          test_dtm_mat[row_index, term_index] <- 1
+          
+          print(str_c('Current row index: ', row_index))
+          print(str_c('Current term index: ', term_index))
+          print(str_c('Existing term ==========> ', train_term))
+          
+        } else {
+          
+          # BUT the term does not exist in the test review's comment
+          # Label the term as 0 for absence
+          test_dtm_mat[row_index, term_index] <- 0
+        }
+        
+      } else {
+        # Else the term does not exist in the test bigrams
+        # Label the term as 0 for absence
+        test_dtm_mat[row_index, term_index] <- 0
+      }
+    }
+  }
+  
+  colnames(test_dtm_mat) <- colnames(train_dtm)
+  
+  # Return the final test bigram matrix
+  return(test_dtm_mat)
+}
+
+```
+
+#### Bigram train and test split
+
 ```{r train_test_split_bi}
 
 # Training document-term matrix for bigrams
@@ -202,13 +267,20 @@ BigramTokenizer <- function (x) {
 }
     
 train_dtm2 <- DocumentTermMatrix(reviews.all[index.train],
-                                       control = list(tokenize = BigramTokenizer))
+                                 control = list(tokenize = BigramTokenizer))
 
 
 
 # Test document-term matrix for bigrams
-test_dtm2 <- DocumentTermMatrix(reviews.all[-index.train], 
-                                      list(dictionary = as.list(dimnames(train_dtm2)[[2]])))
+test_dtm2_tmp <- DocumentTermMatrix(reviews.all[-index.train],
+                                     control = list(tokenize = BigramTokenizer))
+
+# Option 1: Load the existing test bigram dataset
+test_dtm2 <- read.table(file.path('data', 'test_dtm2.txt'))
+
+# Option 2: create the test bigram dataset
+# test_dtm2 <- gen_bigram_test(train_dtm2, test_dtm2_tmp)
+# write.table(test_dtm2, file.path('data', 'test_dtm2.txt'))
 
 ```
 
@@ -304,9 +376,13 @@ test_dtm_freq <- DocumentTermMatrix(reviews.all[-index.train],
 
 # Training document-term matrix for bigrams
 train_dtm2_freq <- removeSparseTerms(train_dtm2, 0.99)
-# Test document-term matrix for bigrams
-test_dtm2_freq <- DocumentTermMatrix(reviews.all[-index.train], 
-                                           list(dictionary = as.list(dimnames(train_dtm2_freq)[[2]])))
+
+# Option 1: Load the existing test bigram dataset of frequency
+test_dtm2_freq <- read.table(file.path('data', 'test_dtm2_freq.txt'))
+
+# Option 2: create the test bigram dataset
+# test_dtm2_freq <- gen_bigram_test(train_dtm2_freq, test_dtm2_tmp)
+# write.table(test_dtm2_freq, file.path('data', 'test_dtm2_freq.txt'))
 
 ```
 
@@ -1025,7 +1101,7 @@ perf_tree2 %>% kable()
 
 #### Frequency
 
-```{r perf_tree2_fre}
+```{r perf_tree2_freq}
 
 perf_tree2_freq <- performance(conf_tree2_freq)
 perf_tree2_freq %>% kable()
