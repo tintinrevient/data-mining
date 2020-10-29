@@ -53,7 +53,7 @@ reviews.true <- VCorpus(DirSource(file.path("data", "op_spam_v1.4", "negative_po
 reviews.all <- c(reviews.false, reviews.true)
 # Create label vector
 # 1 = deceptive negative, 0 = truthful negative (as deceptive negative is what we are interested in!!!)
-labels <- c(rep(1, length(reviews.false)), rep(0, length(reviews.true)))
+labels <- factor(c(rep("1", length(reviews.false)), rep("0", length(reviews.true))))
 
 ```
 
@@ -67,14 +67,15 @@ reviews.all <- reviews.all %>%
   tm_map(removePunctuation) %>% 
   # Make all letters lower case
   tm_map(content_transformer(tolower)) %>% 
+  # Stemming
+  tm_map(stemDocument) %>%
   # Remove English stopwords
   tm_map(removeWords, stopwords("english")) %>% 
   # Remove numbers
   tm_map(removeNumbers) %>% 
   # Remove excess whitespace
-  tm_map(stripWhitespace) %>% 
-  # Stemming
-  tm_map(stemDocument)
+  tm_map(stripWhitespace)
+
 
 ```
 
@@ -160,6 +161,18 @@ calculate_topn <- function(dtm, topn) {
 # 1 fold = 80 samples
 # Fold 1-4 for training = 1:320 from true + 1:320 from false
 index.train <- c(c(1:320), 400+c(1:320))
+
+
+## Sanity check
+set <- rep("test", length(labels))
+set[index.train] <- "train" 
+
+train_test <- tibble(set = set,
+                     labels = labels)
+
+ggplot(train_test, aes(set, fill = labels)) +
+  geom_bar(position = "fill")
+
 ```
 
 ### Unigrams
@@ -240,6 +253,11 @@ test_dtm_mi <- test_dtm[, index.top950[[1]]]
 # Show part of mutual-info-only top-500 words
 index.top950[[2]][1:30]
 
+as.data.frame(index.top950[[2]][1:10]) %>%
+  rownames_to_column("term") %>%
+  rename(mutual_information = `index.top950[[2]][1:10]`) %>%
+  kable()
+
 ```
 
 ### Bigrams
@@ -253,6 +271,11 @@ test_dtm2_mi <- test_dtm2[, index.bigram.top2000[[1]]]
 
 # Show part of mutual-info-only top-300 words
 index.bigram.top2000[[2]][1:30]
+
+as.data.frame(index.bigram.top2000[[2]][1:10]) %>%
+  rownames_to_column("term") %>%
+  rename(mutual_information = `index.bigram.top2000[[2]][1:10]`) %>%
+  kable()
 
 ```
 
@@ -554,8 +577,8 @@ test_preds2 <- tibble(review_type = ifelse(test_labels==1,"deceptive","truthful"
   rowid_to_column("document") 
 
 # Shu???
-wrong_reviews <- df[-train_ind,] %>%
-  filter(test_preds2[["correct"]]==0)
+#wrong_reviews <- df[-train_ind,] %>%
+#  filter(test_preds2[["correct"]]==0)
 
 ggplot(test_preds2, aes(document, prediction, colour = correct)) +
   geom_point(shape = 3, size = 4)
@@ -625,7 +648,10 @@ top10coef2 %>% kable()
 
 ```{r}
 
-ggsave(plot_grid(prec, recall, prec2, recall2), filename = "conf_plots.png", height = 4)
+ggsave(plot_grid(prec + theme(legend.position = "none"), 
+                 recall + theme(legend.position = "none"), 
+                 prec2, recall2), 
+       filename = "conf_plots.png", height = 4)
 
 ```
 
