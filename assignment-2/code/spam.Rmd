@@ -12,6 +12,7 @@ library(tidyverse)
 library(knitr)
 library(varhandle)
 library(tm)
+library(SnowballC)
 library(entropy)
 library(SnowballC)
 library(glmnet)
@@ -179,7 +180,9 @@ reviews.all <- reviews.all %>%
   # Remove numbers
   tm_map(removeNumbers) %>% 
   # Remove excess whitespace
-  tm_map(stripWhitespace)
+  tm_map(stripWhitespace) %>% 
+  # Stemming
+  tm_map(stemDocument)
 
 # stemming, part-of-speech tagging
 ```
@@ -318,7 +321,8 @@ mnb_cv_topn <- function(train.dtm, seq.topn) {
 
 ```{r mnb, include=FALSE}
 # Confusion matrix
-result.mnb <- mnb_cv(train.dtm, 500, NA, NA)
+# result.mnb <- mnb_cv(train.dtm, 500, NA, NA)
+result.mnb <- mnb_cv(train.dtm, 950, NA, NA)
 
 conf.mat.mnb <- table(result.mnb$actual, result.mnb$pred, dnn = c("actual", "predicted"))
 perf.mnb <-performance(conf.mat.mnb) 
@@ -330,7 +334,7 @@ perf.mnb %>% kable()
 
 ```{r mnb_topn_df, eval=FALSE, include=FALSE}
 # Initialize x and all the ys for mutual information
-seq.topn.mi <- seq(50, 1000, by = 50)
+seq.topn.mi <- seq(50, 2000, by = 50)
 result.mnb.mi <- mnb_cv_topn(train.dtm, seq.topn.mi)
 
 # Initialize all the ys for frequency
@@ -357,7 +361,7 @@ df.mnb.topn %>%
   geom_line() +
   geom_point() +
   geom_jitter() +
-  scale_x_log10(breaks = c(50, 100, 150, 200, 250, 300, 350, 500, 1000)) + 
+  scale_x_sqrt(breaks = c(50, 100, 150, 200, 250, 300, 400, 500, 700, 950, 1500, 2000)) + 
   theme(legend.position = c(0.8, 0.2)) +
   xlab("Top-n terms") +
   ylab("Percent")
@@ -365,14 +369,14 @@ df.mnb.topn %>%
 
 ```{r mnb_top300_word_analysis, echo=FALSE}
 # Select top-n mutual-information terms from total vocabularies
-index.top307 <- calculate_topn(train.dtm, topn = 307)
+index.top321 <- calculate_topn(train.dtm, topn = 321)
 # Select top-n mutual-information terms from frequent terms
-index.top307.freq <- calculate_topn(train.dtm.freq, topn = 307)
+index.top321.freq <- calculate_topn(train.dtm.freq, topn = 321)
 
 # Combine mi-terms and frequent terms
-words.mnb.unigram <- t(bind_rows(index.top307[[2]], index.top307.freq[[2]]))
-colnames(words.mnb.unigram) <- c('Top-307 mutual info', 'Top-307 frequent')
-# Save to top307_unigrams.csv
+words.mnb.unigram <- t(bind_rows(index.top321[[2]], index.top321.freq[[2]]))
+colnames(words.mnb.unigram) <- c('Top-321 mutual info', 'Top-321 frequent')
+# Save to top321_unigrams.csv
 # write.csv(words.mnb.unigram, file = file.path('pix', 'mnb_unigrams.csv'))
 
 # Print the partial result
@@ -400,7 +404,7 @@ perf.mnb.test %>% kable()
 
 ```{r mnb_bigram, include=FALSE}
 # Confusion matrix
-result.mnb.bigram <- mnb_cv(train.dtm.bigram, 2000, train.dtm, 500)
+result.mnb.bigram <- mnb_cv(train.dtm.bigram, 2000, NA, NA)
 
 conf.mat.mnb.bigram <- table(result.mnb.bigram$actual, result.mnb.bigram$pred, dnn = c("actual", "predicted"))
 perf.mnb.bigram <- performance(conf.mat.mnb.bigram)
@@ -416,7 +420,7 @@ seq.topn.mi.bigram <- seq(50, 2000, by = 50)
 result.mnb.mi.bigram <- mnb_cv_topn(train.dtm.bigram, seq.topn.mi.bigram)
 
 # Initialize all the ys for frequency
-seq.topn.freq.bigram <- seq(50, 350, by = 50)
+seq.topn.freq.bigram <- seq(50, 450, by = 50)
 result.mnb.freq.bigram <- mnb_cv_topn(train.dtm.bigram.freq, seq.topn.freq.bigram)
 
 list.mnb.mi.bigram <- list(x = seq.topn.mi.bigram, 
@@ -439,7 +443,7 @@ df.mnb.topn.bigram %>%
   geom_line() +
   geom_point() +
   geom_jitter() +
-  scale_x_sqrt(breaks = c(50, 100, 150, 200, 300, 400, 500, 1000, 1100, 1300, 1500)) + 
+  scale_x_sqrt(breaks = c(50, 100, 150, 250, 300, 400, 500, 1000, 1100, 1300, 1500, 2000)) + 
   theme(legend.position = c(0.8, 0.2)) +
   xlab("Top-n terms") +
   ylab("Percent")
@@ -447,14 +451,14 @@ df.mnb.topn.bigram %>%
 
 ```{r mnb_bigram_top300_word_analysis, echo=FALSE}
 # Select top-n mutual-information terms from total vocabularies
-index.top356.bigram <- calculate_topn(train.dtm.bigram, topn = 356)
+index.top461.bigram <- calculate_topn(train.dtm.bigram, topn = 461)
 # Select top-n mutual-information terms from frequent terms
-index.top356.bigram.freq <- calculate_topn(train.dtm.bigram.freq, topn = 356)
+index.top461.bigram.freq <- calculate_topn(train.dtm.bigram.freq, topn = 461)
 
 # Combine mi-terms and frequent terms
-words.mnb.bigram <- t(bind_rows(index.top356.bigram[[2]], index.top356.bigram.freq[[2]]))
-colnames(words.mnb.bigram) <- c('Top-356 mutual info', 'Top-356 frequent')
-# Save to top307_unigrams.csv
+words.mnb.bigram <- t(bind_rows(index.top461.bigram[[2]], index.top461.bigram.freq[[2]]))
+colnames(words.mnb.bigram) <- c('Top-461 mutual info', 'Top-461 frequent')
+# Save to top461_bigrams.csv
 # write.csv(words.mnb.bigram, file = file.path('pix', 'mnb_bigrams.csv'))
 
 # Print the partial result
@@ -630,8 +634,8 @@ rpart_cv <- function(train.dtm, cp, minsplit, minbucket, loss) {
 
 ```{r rpart_hyper_params, include=FALSE}
 # hyper-parameter: feature selection
-train.dtm.rpart <- calculate_cv(train.dtm, 500, NA, NA)
-cp.rpart <- 0
+train.dtm.rpart <- calculate_cv(train.dtm, 950, NA, NA)
+cp.rpart <- 0.036
 minsplit.rpart <- 15
 minbucket.rpart <-5
 loss.rpart <- matrix(c(0, 1, 2, 0), nrow = 2, ncol = 2, byrow = TRUE)
@@ -663,26 +667,12 @@ plotcp(reviews.rpart)
 # printcp(reviews.rpart)
 
 # Tree with lowest cv error
-reviews.rpart.pruned <- prune(reviews.rpart, cp=0.0066)
+reviews.rpart.pruned <- prune(reviews.rpart, cp=0)
 
 # Plot the tree
 # rpart.plot(reviews.rpart.pruned)
 # varlen=0: use full names.
 prp(reviews.rpart.pruned, varlen=0)
-```
-
-```{r rpart_perf, echo=FALSE}
-# Predict and show probability
-# predict(reviews.rpart.pruned, newdata = data.frame(as.matrix(test.dtm.rpart[1:5,])), type = "prob")
-
-reviews.rpart.pred <- predict(reviews.rpart.pruned,
-                              newdata = data.frame(as.matrix(train.dtm.rpart)),
-                              type = "class")
-
-# Confusion matrix
-conf.mat.rpart <- table(labels[index.train], reviews.rpart.pred, dnn = c("actual", "predicted"))
-perf.rpart <- performance(conf.mat.rpart)
-perf.rpart %>% kable()
 ```
 
 ```{r rpart_word_analysis, echo=FALSE}
@@ -746,18 +736,6 @@ reviews.rpart.bigram.pruned <- prune(reviews.rpart.bigram, cp=0)
 # rpart.plot(reviews.rpart.bigram.pruned)
 # varlen=0: use full names.
 prp(reviews.rpart.bigram.pruned, varlen=0, yesno = FALSE)
-```
-
-```{r rpart_perf_bigram, echo=FALSE}
-reviews.rpart.pred.bigram <- predict(reviews.rpart.bigram.pruned,
-                                     newdata = data.frame(as.matrix(train.dtm.rpart.bigram)),
-                                     type = "class")
-
-# Confusion matrix
-conf.mat.rpart.bigram <- table(labels[index.train], reviews.rpart.pred.bigram, 
-                               dnn = c("actual", "predicted"))
-perf.rpart.bigram <- performance(conf.mat.rpart.bigram)
-perf.rpart.bigram %>% kable()
 ```
 
 ```{r rpart_bigram_word_analysis, echo=FALSE}
