@@ -270,7 +270,7 @@ sum(as.matrix(mat_one_review_bi))
 mat_one_review_uni <- DocumentTermMatrix(reviews.all[c(321)],
                                      list(dictionary = c("actually", "asked")))
 
-# bigram exist?
+# unigram exist?
 sum(as.matrix(mat_one_review_uni))
 
 
