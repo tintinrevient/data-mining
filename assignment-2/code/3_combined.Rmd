@@ -263,7 +263,7 @@ gen_bigram_test <- function(train_dtm, test_dtm_tmp) {
 
 # Training document-term matrix for bigrams
 BigramTokenizer <- function (x) {
-  unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+  unlist(lapply(ngrams(words(x), 1:2), paste, collapse = " "), use.names = FALSE)
 }
     
 train_dtm2 <- DocumentTermMatrix(reviews.all[index.train],
