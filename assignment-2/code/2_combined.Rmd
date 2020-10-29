@@ -1,0 +1,1143 @@
+---
+title: 'Assignment 2: Classification for the Detection of Opinion Spam'
+author: "Anouk van der Lee (6620590), Shu Zhao (6833519), Fleur Petit (5583837)"
+date: "`r format(Sys.time(), '%d, %B, %Y')`"
+output: 
+  pdf_document:
+    toc : true
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tm)
+library(knitr)
+library(kableExtra)
+library(glmnet)
+library(randomForest)
+library(SnowballC)
+library(broom)
+library(NLP)
+library(coefplot)
+library(DT)
+library(ggfortify)
+library(cowplot)
+library(varhandle)
+library(entropy)
+library(rpart)
+library(rpart.plot)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+theme_set(theme_bw())
+
+```
+
+# TO DO
+
+- Comparison of results
+
+# 0. Pre-processing
+
+## Load reviews
+
+```{r prepare_df}
+
+
+df <- NULL
+
+file_names <-
+  list.files(path = "negative_polarity", recursive = T)
+
+for (name in file_names) {
+  df <- bind_rows(df,
+    list(fold = as.numeric(str_extract(name, pattern = regex('\\d'))),
+      hotel = str_extract(name, pattern = regex('[a-z]*_\\d+')),
+      review = read_file(str_c("negative_polarity/", name)),
+      label = as.numeric(str_detect(name, "deceptive")) # 1 for deceptive and 0 for truthful
+    )
+  )
+}
+
+df <- df %>%
+  mutate(id = as.numeric(str_extract(hotel, pattern = regex('\\d+'))),
+         hotel = str_extract(hotel, pattern = regex('[a-z]*'))
+         ) %>%
+  arrange(fold)
+
+head(df, 2) %>%
+  kable()
+
+```
+
+## Prepare corpus
+
+```{r prepare_corpus}
+
+corpus <- VCorpus(VectorSource(df[["review"]])) %>%
+  tm_map(., content_transformer(tolower)) %>% # no capital letters
+  tm_map(., removePunctuation) %>% # Remove punctuation
+  tm_map(., stemDocument) %>% # stem words
+  tm_map(., removeWords, stopwords("english")) %>% # remove stopwords
+  tm_map(., stripWhitespace) # remove extra white space
+
+```
+
+## Performance function
+
+```{r}
+
+performance <- function(confusion_matrix){
+  tn <- confusion_matrix[1,1]
+  fn <- confusion_matrix[2,1]
+  n_pred <- tn+fn
+  
+  fp <- confusion_matrix[1,2]
+  tp <- confusion_matrix[2,2]
+  p_pred <- fp+tp
+  
+  n <- tn+fp
+  p <- fn+tp
+  
+  performance_metrics <- tibble(metric = c("recall",
+                                "miss-rate", # 1 - recall
+                                "fall-out", # 1 - selectivity
+                                "selectivity",
+                                "prevalence",
+                                "precision",
+                                "false omission rate", # 1 - neg_predictive_value
+                                "pos likelihood ratio",
+                                "neg likelihood ratio",
+                                "accuracy",
+                                "false discovery rate", # 1 - precision
+                                "neg predictive value",
+                                "diagnostic odds ratio",
+                                "F1"),
+                      value = c(tp/p, # recall
+                               fn/p, # 1 - recall
+                               fp/n, # 1 - selectivity
+                               tn/n, # selectivity
+                               p/(n+p), # prevalence
+                               tp/p_pred, # precision
+                               fn/n_pred, # 1 - neg_predictive_value
+                               (tp/p)/(fp/n), # positive likelihood ratio
+                               (fn/p)/(tn/n), # negative likelihood ratio
+                               (tp+tn)/(n+p), # accuracy
+                               fp/p_pred, # 1 - precision
+                               tn/n_pred, # negative predictive value
+                               ((tp/p)/(fp/n))/((fn/p)/(tn/n)), # diagnostic odds ratio
+                               2*(tp/p_pred)*(tp/p)/((tp/p_pred) + (tp/p))) # F1
+  )
+  
+  performance_metrics
+}
+
+
+```
+
+### Mutual information top n function
+
+```{r}
+
+# Calculate top-n high mutual-information terms' indices
+calculate_topn <- function(dtm, topn) {
+  # Convert document term matrix to binary (term present/absent)
+  dtm.bin <- as.matrix(dtm) > 0
+  
+  # Compute mutual information of each term with class label
+  mi <- apply(as.matrix(dtm.bin),
+              2, 
+              function(x,y){ mi.plugin(table(x,y)/length(y), unit="log2")},
+              labels[train_ind])
+  
+  # Sort the indices from high to low mutual information
+  mi.order <- order(mi, decreasing = TRUE)
+  
+  # Return top-n mutual-information terms' index
+  return(list(mi.order[c(1:topn)], mi[mi.order[c(1:topn)]]))
+}
+# Calculate the training samples used for cross-validation
+calculate_cv <- function(train.dtm, topn, train.dtm.appendix, topn.appendix) {
+  # Initialize the training samples
+  train.dtm.topn <- NULL
+  
+  # Whether to calculate top-n
+  if(is.null(topn)) {
+    # Use the total train.dtm
+    train.dtm.topn <- train.dtm
+  } else {
+    # Calculate top-n features out of train.dtm
+    index.topn <- calculate_topn(train.dtm, topn = topn)
+    train.dtm.topn <- train.dtm[, index.topn[[1]]]
+    
+    # Whether to combine bigrams with unigrams
+    if(!is.na(train.dtm.appendix) && !is.na(topn.appendix)) {
+      index.topn.appendix <- calculate_topn(train.dtm.appendix, topn = topn.appendix)
+      train.dtm.topn.appendix <- train.dtm.appendix[, index.topn.appendix[[1]]]
+      train.dtm.topn <- cbind(train.dtm.topn, train.dtm.topn.appendix)
+    }
+  }
+  
+  # Return the training samples
+  return(train.dtm.topn)
+}
+
+```
+
+## Get word frequency matrix
+
+### Unigrams
+
+```{r unigram}
+
+length(corpus)
+
+dtm <- DocumentTermMatrix(corpus)
+
+no_sparse_dtm <- removeSparseTerms(dtm, sparse = 0.95) # those terms from x are removed which have at least a 70
+# percent of empty (i.e., terms occurring 0 times in a document) elements. I.e., the resulting
+# matrix contains only terms with a sparse factor of less than 70 percent
+
+dim(dtm)
+dim(no_sparse_dtm)
+
+inspect(dtm)
+inspect(no_sparse_dtm)
+
+```
+
+### Bigrams
+
+```{r bigram}
+
+BigramTokenizer <-
+  function(x)
+    unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+
+dtm2 <- DocumentTermMatrix(corpus, control = list(tokenize = BigramTokenizer))
+no_sparse_dtm2 <- removeSparseTerms(dtm2, sparse = 0.99)
+
+dim(no_sparse_dtm2)
+
+inspect(no_sparse_dtm2)
+
+```
+
+
+## Vector with labels
+
+```{r labels}
+
+labels <- as.factor(df[["label"]])
+
+labels[c(1:10, 790:800)]
+
+```
+
+## Split in train and test data
+
+### Unigrams
+
+```{r train_test_split_uni}
+
+# training data does not have to be sampled at random
+# set.seed(123)
+
+#train_ind <- sample(1:nrow(df), size = nrow(df)*0.75)
+
+train_ind <- 1:640
+
+train_dtm <- as.matrix(no_sparse_dtm)[train_ind,]
+train_labels <- labels[train_ind]
+
+test_dtm <- as.matrix(no_sparse_dtm)[-train_ind,]
+test_labels <- labels[-train_ind]
+
+df[train_ind, "set"] <- "train"
+df[-train_ind, "set"] <- "test"
+
+ggplot(df, aes(set, fill = labels)) +
+  geom_bar(position = "fill")
+
+
+
+```
+
+```{r}
+
+# Info per hotel, not so relevant
+
+# ggplot(df, aes(hotel, fill = as.factor(label))) +
+#   geom_bar() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 
+# ggplot(df, aes(hotel, fill = set)) +
+#   geom_bar() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 
+# ggplot(df[train_ind,], aes(hotel, fill = as.factor(label))) +
+#   geom_bar(position = "fill") +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+### Bigrams
+
+```{r train_test_split_bi}
+
+train_dtm2 <- as.matrix(no_sparse_dtm2)[train_ind,]
+
+test_dtm2 <- as.matrix(no_sparse_dtm2)[-train_ind,]
+
+```
+
+### Mutual information
+
+```{r}
+
+train_dtm_mi <- as.matrix(dtm)[train_ind,]
+test_dtm_mi <- as.matrix(dtm)[-train_ind,]
+
+train_dtm2_mi <- as.matrix(dtm2)[train_ind,]
+test_dtm2_mi <- as.matrix(dtm2)[-train_ind,]
+
+# Select top-n mutual-information terms from total vocabularies
+index_top50 <- calculate_topn(train_dtm_mi, topn = 50)
+dtm_top50 <- train_dtm_mi[, index_top50[[1]]]
+# Show part of mutual-info-only top-500 words
+as.data.frame(index_top50[[2]][1:30]) %>%
+  rownames_to_column("term") %>%
+  rename(mutual_information = `index_top50[[2]][1:30]`) %>%
+  kable()
+
+
+# Select top-n mutual-information bigrams from total bigrams
+index2_top50 <- calculate_topn(train_dtm2_mi, topn = 50)
+dtm2_top50 <- train_dtm2_mi[, index2_top50[[1]]]
+# Show part of mutual-info-only top-300 words
+as.data.frame(index2_top50[[2]][1:30]) %>%
+  rownames_to_column("term") %>%
+  rename(mutual_information = `index2_top50[[2]][1:30]`) %>%
+  kable()
+
+```
+
+
+# 1. Multinomial naive Bayes (generative linear classifier)
+
+## Function for multinomial Bayes classifier
+
+```{r mnb}
+
+# Function for multinomial naive Bayes
+
+train.mnb <- function (dtm, labels) {
+  call <- match.call()
+  V <- ncol(dtm)
+  N <- nrow(dtm)
+  prior <- table(labels) / N
+  labelnames <- names(prior)
+  nclass <- length(prior)
+  cond.probs <- matrix(nrow = V, ncol = nclass)
+  dimnames(cond.probs)[[1]] <- dimnames(dtm)[[2]]
+  dimnames(cond.probs)[[2]] <- labelnames
+  index <- list(length = nclass)
+  for (j in 1:nclass) {
+    index[[j]] <- c(1:N)[labels == labelnames[j]]
+  }
+  
+  for (i in 1:V) {
+    for (j in 1:nclass) {
+      cond.probs[i, j] <-
+        (sum(dtm[index[[j]], i]) + 1) / (sum(dtm[index[[j]], ]) + V)
+    }
+  }
+  list(call = call,
+       prior = prior,
+       cond.probs = cond.probs)
+}
+
+predict.mnb <- function (model, dtm) {
+    classlabels <- dimnames(model$cond.probs)[[2]]
+    logprobs <- dtm %*% log(model$cond.probs)
+    N <- nrow(dtm)
+    nclass <- ncol(model$cond.probs)
+    logprobs <-
+      logprobs + matrix(nrow = N,
+                        ncol = nclass,
+                        log(model$prior),
+                        byrow = T)
+    classlabels[max.col(logprobs)]
+  }
+
+
+```
+
+## Function for cross validation
+
+```{r}
+
+mnb_cv <- function(train_dtm, topn, train_dtm.appendix, topn.appendix) {
+  
+  labels <- as.numeric(as.character(labels))
+  # Calcuate the training samples
+  train_dtm.topn <- calculate_cv(train_dtm, topn, train_dtm.appendix, topn.appendix)
+  
+  # 4-fold cross validation
+  reviews.mnb.actual <- c()
+  reviews.mnb.pred <- c()
+    
+  # hyper-parameter: feature selection
+  # the best option: only mutual information to select top-500 terms out of 6900 total terms
+  train_dtm.mnb <- train_dtm.topn
+  
+  for(i in 1:4) {
+    # Validation fold
+    val.start <- (i - 1) * 80 + 1
+    val.end <- val.start + 80 - 1
+    val.range <- c(c(val.start:val.end), 320+c(val.start:val.end))
+    
+    # Training fold
+    train.range <- c(c(1:320)[-val.range], 320+c(1:320)[-val.range])
+    
+    # Train the model with priors and conditional probabilities
+    reviews.mnb <- train.mnb(as.matrix(train_dtm.mnb)[train.range,],
+                             labels[train_ind][train.range])
+    
+    # Actual labels
+    reviews.mnb.actual <- c(reviews.mnb.actual, labels[train_ind][val.range])
+    # Make predictions
+    reviews.mnb.pred <- c(reviews.mnb.pred, 
+                          predict.mnb(reviews.mnb, as.matrix(train_dtm.mnb)[val.range,]))
+  }
+  
+  # Return the vectors of actuals and predictions
+  return(list(actual = reviews.mnb.actual, pred = reviews.mnb.pred))
+}
+
+mnb_cv_topn <- function(train_dtm, seq.topn) {
+  # Initialize f1 and acc
+  f1 <- c()
+  acc <- c()
+  
+  # Iterate through top-n options
+  for(topn in seq.topn) {
+    
+    mnb.result <- mnb_cv(train_dtm, topn, NA, NA)
+    
+    # Confusion matrix
+    conf.mat.mnb <- table(mnb.result$actual, mnb.result$pred, dnn = c("actual", "predicted"))
+    perf.mnb <- performance(conf.mat.mnb)
+    
+    # F1 score
+    f1 <- c(f1, round(as.numeric(perf.mnb[14,'value']), 3))
+    # Accuracy
+    acc <- c(acc, round(as.numeric(perf.mnb[10,'value']), 3))
+  }
+  
+  # Return the list of f1 and acc
+  return(list(f1 = f1, acc = acc))
+}
+
+
+```
+
+### 1. Multinomial naive Bayes - Unigram
+
+```{r mnb, include=FALSE}
+
+# Confusion matrix
+result.mnb <- mnb_cv(train_dtm_mi, 500, NA, NA)
+conf.mat.mnb <- table(result.mnb$actual, result.mnb$pred, dnn = c("actual", "predicted"))
+perf_mnb <- performance(conf.mat.mnb) 
+
+```
+
+```{r mnb_perf, echo=FALSE}
+
+perf_mnb %>% kable()
+
+```
+
+```{r mnb_topn_df, eval=FALSE, include=FALSE}
+
+# Initialize x and all the ys for mutual information
+seq.topn.mi <- seq(50, 1000, by = 50)
+result.mnb.mi <- mnb_cv_topn(train_dtm_mi, seq.topn.mi)
+# Initialize all the ys for frequency
+seq.topn.freq <- seq(50, 250, by = 50)
+result.mnb.freq <- mnb_cv_topn(train_dtm, seq.topn.freq)
+list.mnb.mi <- list(x = seq.topn.mi, 
+                    F1_score_by_mutual_info = result.mnb.mi$f1, 
+                    Accuracy_by_mutual_info = result.mnb.mi$acc)
+num.na <- length(seq.topn.mi) - length(seq.topn.freq)
+list.mnb.freq <- list(F1_score_by_frequency = c(result.mnb.freq$f1, rep(NA, num.na)),
+                      Accuracy_by_frequency = c(result.mnb.freq$acc, rep(NA, num.na)))
+
+```
+
+```{r mnb_topn_df_plot, eval=FALSE, include=FALSE}
+
+df.mnb.topn <- data.frame(list.mnb.mi, list.mnb.freq)
+df.mnb.topn %>% 
+  gather(key, value, F1_score_by_mutual_info, Accuracy_by_mutual_info, 
+         F1_score_by_frequency, Accuracy_by_frequency) %>% 
+  ggplot(aes(x = x, y = value, colour = key)) +
+  geom_line() +
+  geom_point() +
+  geom_jitter() +
+  scale_x_log10(breaks = c(50, 100, 150, 200, 250, 300, 350, 500, 1000)) + 
+  theme(legend.position = c(0.8, 0.2)) +
+  xlab("Top-n terms") +
+  ylab("Percent")
+
+```
+
+```{r mnb_top300_word_analysis, echo=FALSE}
+
+# Select top-n mutual-information terms from total vocabularies
+index.top307 <- calculate_topn(train_dtm_mi, topn = 307)
+# Select top-n mutual-information terms from frequent terms
+index.top307.freq <- calculate_topn(train_dtm, topn = 307)
+# Combine mi-terms and frequent terms
+words.mnb.unigram <- t(bind_rows(index.top307[[2]], index.top307.freq[[2]]))
+colnames(words.mnb.unigram) <- c('Top-307 mutual info', 'Top-307 frequent')
+# Save to top307_unigrams.csv
+# write.csv(words.mnb.unigram, file = file.path('pix', 'mnb_unigrams.csv'))
+# Print the partial result
+words.mnb.unigram[1:20,]
+
+```
+
+```{r mnb_test, eval=FALSE, include=FALSE}
+
+# Final training set and test set
+train_dtm.mnb <- train_dtm.top300
+test.dtm.mnb <- test.dtm.top300
+# Train the model with priors and conditional probabilities
+reviews.mnb.test <- train.mnb(as.matrix(train_dtm.mnb), labels[train_ind])
+# Make predictions
+reviews.mnb.test.pred <- predict.mnb(reviews.mnb.test, as.matrix(test.dtm.mnb))
+# Confusion matrix
+conf.mat.mnb.test <- table(labels[-train_ind], reviews.mnb.test.pred, dnn = c("actual", "predicted"))
+perf.mnb.test <-performance(conf.mat.mnb.test) 
+perf.mnb.test %>% kable()
+
+```
+
+### 2. Multinomial naive Bayes - Bigram
+
+```{r mnb_bigram, include=FALSE}
+
+# Confusion matrix
+result.mnb.bigram <- mnb_cv(train_dtm2_mi, 2000, train_dtm_mi, 500)
+conf.mat.mnb.bigram <- table(result.mnb.bigram$actual, result.mnb.bigram$pred, dnn = c("actual", "predicted"))
+perf_mnb2 <- performance(conf.mat.mnb.bigram)
+
+```
+
+```{r mnb_bigram_perf, echo=FALSE}
+
+perf_mnb2 %>% kable()
+
+```
+
+```{r mnb_bigram_topn_df, eval=FALSE, include=FALSE}
+
+# Initialize x and all the ys for mutual information
+seq.topn.mi.bigram <- seq(50, 2000, by = 50)
+result.mnb.mi.bigram <- mnb_cv_topn(train_dtm2_mi, seq.topn.mi.bigram)
+# Initialize all the ys for frequency
+seq.topn.freq.bigram <- seq(50, 350, by = 50)
+result.mnb.freq.bigram <- mnb_cv_topn(train_dtm2, seq.topn.freq.bigram)
+list.mnb.mi.bigram <- list(x = seq.topn.mi.bigram, 
+                           F1_score_by_mutual_info = result.mnb.mi.bigram$f1, 
+                           Accuracy_by_mutual_info = result.mnb.mi.bigram$acc)
+num.na.bigram <- length(seq.topn.mi.bigram) - length(seq.topn.freq.bigram)
+list.mnb.freq.bigram <- list(F1_score_by_frequency = c(result.mnb.freq.bigram$f1, rep(NA, num.na.bigram)),
+                             Accuracy_by_frequency = c(result.mnb.freq.bigram$acc, rep(NA, num.na.bigram)))
+
+```
+
+```{r mnb_bigram_topn_df_plot, eval=FALSE, include=FALSE}
+
+df.mnb.topn.bigram <- data.frame(list.mnb.mi.bigram, list.mnb.freq.bigram)
+df.mnb.topn.bigram %>% 
+  gather(key, value, F1_score_by_mutual_info, Accuracy_by_mutual_info, 
+         F1_score_by_frequency, Accuracy_by_frequency) %>% 
+  ggplot(aes(x = x, y = value, colour = key)) +
+  geom_line() +
+  geom_point() +
+  geom_jitter() +
+  scale_x_sqrt(breaks = c(50, 100, 150, 200, 300, 400, 500, 1000, 1100, 1300, 1500)) + 
+  theme(legend.position = c(0.8, 0.2)) +
+  xlab("Top-n terms") +
+  ylab("Percent")
+
+```
+
+```{r mnb_bigram_top300_word_analysis, echo=FALSE}
+
+# Select top-n mutual-information terms from total vocabularies
+index.top356.bigram <- calculate_topn(train_dtm2_mi, topn = 356)
+# Select top-n mutual-information terms from frequent terms
+index.top356.bigram.freq <- calculate_topn(train_dtm2, topn = 356)
+# Combine mi-terms and frequent terms
+words.mnb.bigram <- t(bind_rows(index.top356.bigram[[2]], index.top356.bigram.freq[[2]]))
+colnames(words.mnb.bigram) <- c('Top-356 mutual info', 'Top-356 frequent')
+# Save to top307_unigrams.csv
+# write.csv(words.mnb.bigram, file = file.path('pix', 'mnb_bigrams.csv'))
+# Print the partial result
+words.mnb.bigram[60:80,]
+
+```
+
+# 2. Regularised logistic regression (discriminative linear classifier)
+
+A logistic regeression model uses the information from the document term matrix to predict the class (either '1' for deceptive or '0' for truthful). 
+
+## Unigram
+
+### Choose lambda
+
+```{r cv_lasso}
+
+# Use LASSO (penalising for number of parameters)
+# Determine lambda by means of cross validation
+
+cv_lasso <- cv.glmnet(train_dtm, train_labels, alpha = 1, family = "binomial", type.measure="class")
+
+lambda_uni <- plot(cv_lasso)
+
+coefs <- as.data.frame(as.matrix(coef(cv_lasso, s="lambda.1se"))) %>%
+  rownames_to_column(var = "term") %>%
+  rename(coefficient = `1`) %>%
+  filter(coefficient != 0)
+
+top10coef <- coefs %>% 
+  filter(term != "(Intercept)") %>% 
+  arrange(desc(abs(coefficient))) %>% 
+  head(10) %>%
+  mutate(probability = exp(coefficient)/(exp(coefficient)+1))
+
+top10coef %>%
+  kable()
+
+
+```
+
+### Train
+
+```{r train_glm, fig.height=10}
+
+model_glm <- glmnet(train_dtm, train_labels, alpha = 1, family = "binomial", 
+                    lambda = cv_lasso$lambda.1se, type.measure="class") # I choose the largest lambda within 1se from the smallest lambda
+
+coefplot(model_glm, lambda=cv_lasso$lambda.1se, sort='magnitude', cex=100)
+
+
+```
+
+### Predict
+
+```{r predict_glm, fig.width = 10}
+
+#test_dtm_glm <- model.matrix(test_labels ~ test_dtm)[,-1]
+
+predicted_glm <- predict(model_glm, 
+                             newx = test_dtm, 
+                             type = "class", # Type "response" gives the fitted probabilities for "binomial"
+                             s= cv_lasso$lambda.1se)
+
+
+```
+
+```{r}
+
+# Information about hotels and wrong predictions
+
+# wrong_reviews <- df[-train_ind,] %>%
+#   filter(test_preds[["correct"]]==0)
+# 
+# wrong_reviews <- as.data.frame(test_dtm[test_preds[["correct"]]==0,]) %>%
+#   gather(key = "word", value = "count") %>%
+#   group_by(word) %>%
+#   summarise(n = sum(count))
+# 
+# per_hotel <- df[-train_ind,] %>%
+#   mutate(correct = test_preds[["correct"]]==1)
+# 
+# ggplot(per_hotel, aes(hotel, fill = correct)) +
+#   geom_bar() + 
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+### Confusion matrix
+
+```{r confusion_glm}
+
+test_preds <- tibble(review_type = ifelse(test_labels==1,"deceptive","truthful"),
+                     prediction = ifelse(predicted_glm==1, "deceptive", "truthful"),
+                     correct = ifelse(review_type == prediction, "1", "0")) %>%
+  rowid_to_column("document") 
+
+ggplot(test_preds, aes(document, prediction, colour = correct)) +
+  geom_point(shape = 3, size = 4)# +
+  #facet_grid(~review_type, scales = "free")
+
+prec <- ggplot(test_preds, aes(prediction, fill = correct)) +
+  geom_bar(position = "fill")
+
+recall <- ggplot(test_preds, aes(review_type, fill = correct)) +
+  geom_bar(position = "fill")
+
+conf_glm <- table(test_labels, predicted_glm)
+
+conf_glm
+
+```
+
+
+### Performance metrics
+
+```{r performance_glm}
+
+perf_glm <- performance(conf_glm)
+
+perf_glm %>% kable()
+
+```
+
+## Bigram
+
+### Choose lambda
+
+```{r cv_lasso2}
+
+# Use LASSO (penalising for number of parameters)
+# Determine lambda by means of cross validation
+
+cv_lasso2 <- cv.glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial", type.measure = "class")
+
+lambda_bi <-plot(cv_lasso2)
+
+coefs2 <- as.data.frame(as.matrix(coef(cv_lasso2, s="lambda.1se"))) %>%
+  rownames_to_column(var = "term") %>%
+  rename(coefficient = `1`) %>%
+  filter(coefficient != 0)
+
+top10coef2 <- coefs2 %>%
+  arrange(desc(abs(coefficient))) %>% 
+  head(10) %>% 
+  mutate(probability = exp(coefficient)/(exp(coefficient)+1)) 
+
+top10coef2 %>%
+  kable()
+
+```
+
+### Train
+
+```{r train_glm2}
+
+model_glm2 <- glmnet(train_dtm2, train_labels, alpha = 1, family = "binomial", 
+                    lambda = cv_lasso2$lambda.1se) # I choose the largest lambda within 1se from the smallest lambda
+
+
+```
+
+### Predict
+
+```{r predict_glm2}
+
+#test_dtm_glm <- model.matrix(test_labels ~ test_dtm)[,-1]
+
+predicted_glm2 <- predict(model_glm2, 
+                             newx = test_dtm2, 
+                             type = "class", # Type "response" gives the fitted probabilities for "binomial"
+                             s= cv_lasso2$lambda.1se)
+
+
+```
+
+### Confusion matrix
+
+```{r confusion_glm2}
+
+test_preds2 <- tibble(review_type = ifelse(test_labels==1,"deceptive","truthful"),
+                     prediction = ifelse(predicted_glm2==1, "deceptive", "truthful"),
+                     correct = ifelse(review_type == prediction, "1", "0")) %>%
+  rowid_to_column("document") 
+
+wrong_reviews <- df[-train_ind,] %>%
+  filter(test_preds2[["correct"]]==0)
+
+ggplot(test_preds2, aes(document, prediction, colour = correct)) +
+  geom_point(shape = 3, size = 4)
+
+prec2 <- ggplot(test_preds2, aes(prediction, fill = correct)) +
+  geom_bar(position = "fill")
+
+recall2 <- ggplot(test_preds2, aes(review_type, fill = correct)) +
+  geom_bar(position = "fill")
+
+conf_glm2 <- table(test_labels, predicted_glm2)
+
+conf_glm2 
+
+```
+
+
+### Performance metrics
+
+```{r performance_glm2}
+
+perf_glm2 <- performance(conf_glm2)
+
+perf_glm2 %>% kable()
+
+```
+
+# Comparison logistic regression models
+
+## Lambda plots
+
+```{r}
+
+tidied_cv <- tidy(cv_lasso) %>% rename(MSE = estimate)
+tidied_cv2 <- tidy(cv_lasso2) %>% rename(MSE = estimate)
+
+# plot of MSE as a function of lambda
+l_cv<-ggplot(tidied_cv, aes(log(lambda), MSE)) +
+  geom_point(colour = "red") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), alpha = .25) +
+  geom_vline(xintercept = log(cv_lasso$lambda.min)) +
+  geom_vline(xintercept = log(cv_lasso$lambda.1se), lty = 2) +
+  ggtitle("Unigram")
+
+l_cv2<-ggplot(tidied_cv2, aes(log(lambda), MSE)) +
+  geom_point(colour = "red") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), alpha = .25) +
+  geom_vline(xintercept = log(cv_lasso$lambda.min)) +
+  geom_vline(xintercept = log(cv_lasso$lambda.1se), lty = 2) +
+  ggtitle("Bigram")
+
+ggsave(plot_grid(l_cv, l_cv2), filename = "cv_lambda.png", width = 9, height = 3)
+
+```
+
+## Coefficient tables
+
+```{r}
+
+top10coef %>% kable()
+
+top10coef2 %>% kable() 
+
+```
+
+## Confusion matrix plots
+
+```{r}
+
+ggsave(plot_grid(prec, recall, prec2, recall2), filename = "conf_plots.png", height = 4)
+
+```
+
+## Performance
+
+```{r}
+
+compare_glms <- tibble(metric = perf_mnb[["metric"]],
+                       glm = perf_glm[["value"]],
+                       glm2 = perf_glm2[["value"]]) %>%
+  filter(metric %in% c("precision", "neg predictive value", "recall", "selectivity", "accuracy"))
+
+compare_glms %>% kable()
+
+
+```
+
+
+# 3. Classification trees (flexible classifier)
+
+
+## Train
+
+```{r train_tree}
+
+#library(rpart)
+#model_tree_test <- rpart(class ~., data=train_dtm_dataframe, cp=0, minbucket=1, minsplit = 2, method = "class")
+#printcp(model_tree_test)
+mtry_value = (ncol(train_dtm))
+#change the training labels to factors in order to use the function as a classification and not as a regression
+train_labels <-as.factor(train_labels)
+model_tree <- randomForest( x = train_dtm, y = train_labels, ntree = 1, mtry = mtry_value )
+
+```
+
+## Predict
+
+```{r predict_tree}
+
+#dit was eerst probabilities tree
+predicted_tree <- predict(model_tree, test_dtm, type = "response")
+#remove the extra function since no regression was performed
+#predicted_tree <- ifelse(probabilities_tree > 0.5, 1, 0)
+
+```
+
+## Confusion matrix 
+
+```{r conf_tree}
+
+conf_tree <- table(test_labels, predicted_tree)
+conf_tree
+
+```
+
+## Performance metrics
+
+```{r performance_tree}
+
+perf_tree <- performance(conf_tree)
+perf_tree %>% kable()
+
+```
+
+
+# 4. Random forests (flexible classifier)
+
+##unigram
+
+###select mtry value
+
+```{r}
+#select different values using the method described in the report
+ntreeTry = 100
+stepFactor = 5.12
+improve = 0.001
+
+mtry = 9
+
+
+#run and notate results
+model_random <- tuneRF (x = train_dtm, y = train_labels, mtry = mtry, ntreeTry = ntreeTry, stepFactor = stepFactor, improve= improve, trace = TRUE, plot = TRUE, doBest = FALSE)
+
+```
+
+###select nodesize
+```{r}
+nodelist <- c()
+
+#check if mtry is indeed the chosen mtry
+mtry = 9
+ntreeTry = 50
+
+#select a range for i for minimal size of terminal nodes
+for (i in 1: 1000){
+  model_random <- randomForest(x = train_dtm, y = train_labels, mtry = mtry, nodesize = i, ntree = ntreeTry, importance = TRUE, do.trace = FALSE)
+  
+  #select the out of bag score after all trees have run 
+  nodelist <- c(nodelist, model_random$err.rate[ntreeTry,1])
+  print(i)
+  print(model_random$err.rate[ntreeTry,1])
+}
+
+nodelist
+
+#Create a plot of the data gathered
+nodeplot <- tibble(OOB = nodelist) %>%
+  rowid_to_column("nodesize") %>%
+  ggplot(aes(nodesize, OOB)) +
+  geom_point() +
+  geom_line()
+
+nodeplot
+
+
+#now select the best nodesize value
+```
+
+
+###train
+
+```{r}
+#Check if nodesize is indeed the chosen nodesize
+nodesize = 63
+ntreeTry = 2000
+
+#Train the model with the chosen values on the unigram dataset
+model_random <- randomForest(x = train_dtm, y = train_labels, mtry = mtry, nodesize = nodesize, ntree = ntreeTry, importance = TRUE, do.trace = TRUE)
+
+
+```
+
+
+### Predict
+
+```{r predict_random}
+
+predicted_random <- predict(model_random, test_dtm, type = "response")
+
+```
+
+### Confusion matrix 
+
+```{r conf_random}
+
+conf_random <- table(test_labels, predicted_random)
+conf_random
+
+```
+
+### Performance metrics
+
+```{r performance_random}
+
+perf_random <- performance(conf_random)
+perf_random %>% kable()
+
+```
+
+
+##bigram
+###select mtry value
+
+```{r}
+
+
+#select different values using the method described in the report
+ntreeTry2 = 100
+stepFactor2 = 33.34
+improve2 = 0.001
+mtry2 = 3
+
+
+#run and notate results
+model_random2 <- tuneRF (x = train_dtm2, y = train_labels, mtry = mtry2, ntreeTry = ntreeTry2, stepFactor = stepFactor2, improve= improve2, trace = TRUE, plot = TRUE, doBest = FALSE)
+
+```
+
+###select nodesize
+```{r}
+nodelist2 <- c()
+
+#check if mtry is indeed the chosen mtry
+mtry2 = 3
+ntreeTry2 = 20
+
+#select a range for i for minimal size of terminal nodes
+for (i in 1: 1000){
+  model_random2 <- randomForest(x = train_dtm2, y = train_labels, mtry = mtry2, nodesize = i, ntree = ntreeTry2, importance = TRUE, do.trace = FALSE)
+  
+  #select the out of bag score after all trees have run 
+  
+  nodelist2 <- c(nodelist2, model_random2$err.rate[ntreeTry2,1])
+  print(i)
+  print(model_random2$err.rate[ntreeTry2,1])
+}
+
+nodelist2
+
+#Create a plot of the data gathered
+nodeplot2 <- tibble(OOB = nodelist2) %>%
+  rowid_to_column("nodesize") %>%
+  ggplot(aes(nodesize, OOB)) +
+  geom_point() +
+  geom_line()
+
+nodeplot2
+
+
+#now choose a value for nodesize by hand
+```
+
+
+###train
+
+```{r}
+#Check if nodesize is indeed the chosen nodesize
+nodesize2 = 125 
+ntreeTry2 = 100
+
+#Train the model with the chosen values on the unigram dataset
+model_random2 <- randomForest(x = train_dtm2, y = train_labels, mtry = mtry2, nodesize = nodesize2, ntree = ntreeTry2, importance = TRUE, do.trace = TRUE, keep.forest = TRUE)
+
+
+```
+
+
+### Predict
+
+```{r predict_random}
+
+predicted_random2 <- predict(model_random2, test_dtm2, type = "response")
+
+```
+
+### Confusion matrix 
+
+```{r conf_random}
+
+conf_random <- table(test_labels, predicted_random2)
+conf_random
+
+```
+
+### Performance metrics
+
+```{r performance_random}
+
+perf_random <- performance(conf_random)
+perf_random %>% kable()
+
+```
+
+
+# Comparison
+
+## Performance metrics
+
+```{r perf_compare}
+
+perf_compare <- tibble(metric = perf_mnb[["metric"]],
+                       mnb = perf_mnb[["value"]],
+                       glm = perf_glm[["value"]],
+                       glm2 = perf_glm2[["value"]],
+                       tree = perf_tree[["value"]],
+                       random = perf_random[["value"]])
+
+perf_compare %>% kable()
+
+
+```
+
+## Logistic regression
+
+
+```{r}
+
+predictions_per_model <- tibble(predictions = c(predicted_mnb, 
+                                      as.vector(predicted_glm), 
+                                      predicted_tree,
+                                      predicted_random),
+                      models = c(rep("mnb", 
+                                     length(predicted_mnb)), 
+                                 rep("logistic regression", 
+                                     nrow(predicted_glm)), 
+                                 rep("single tree", 
+                                     length(predicted_tree)),
+                                 rep("random forest",
+                                     length(predicted_random))), 
+                      ground_truth = c(rep(test_labels, 4)), 
+                      correct = ifelse(ground_truth == predictions, 1, 0)) %>%
+  mutate(models = factor(models,levels=c("mnb", "logistic regression", "single tree", "random forest")))
+
+
+glm(correct ~ models, family = "binomial", data = predictions_per_model) %>% 
+  tidy() %>%
+  kable()
+
+
+```
