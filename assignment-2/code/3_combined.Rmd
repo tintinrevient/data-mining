@@ -68,7 +68,7 @@ reviews.all <- reviews.all %>%
   # Make all letters lower case
   tm_map(content_transformer(tolower)) %>% 
   # Stemming
-  # tm_map(stemDocument) %>%
+  tm_map(stemDocument) %>%
   # Remove English stopwords
   tm_map(removeWords, stopwords("english")) %>% 
   # Remove numbers
