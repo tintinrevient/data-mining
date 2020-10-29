@@ -214,7 +214,13 @@ test_dtm2 <- DocumentTermMatrix(reviews.all[-index.train],
 
 #### Analysis of training and test bigrams
 
-```{r train_test_split_bi_analysis}
+```{r train_test_split_bi_analysis, eval=FALSE, include=FALSE}
+
+train_dtm2 <- DocumentTermMatrix(reviews.all[index.train],
+                                 control = list(tokenize = BigramTokenizer))
+
+test_dtm2 <- DocumentTermMatrix(reviews.all[-index.train],
+                                 control = list(tokenize = BigramTokenizer))
 
 train_bigrams <- colnames(as.matrix(train_dtm2))
 
