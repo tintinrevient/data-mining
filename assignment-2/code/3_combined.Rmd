@@ -68,7 +68,7 @@ reviews.all <- reviews.all %>%
   # Make all letters lower case
   tm_map(content_transformer(tolower)) %>% 
   # Stemming
-  tm_map(stemDocument) %>%
+  # tm_map(stemDocument) %>%
   # Remove English stopwords
   tm_map(removeWords, stopwords("english")) %>% 
   # Remove numbers
@@ -209,6 +209,31 @@ train_dtm2 <- DocumentTermMatrix(reviews.all[index.train],
 # Test document-term matrix for bigrams
 test_dtm2 <- DocumentTermMatrix(reviews.all[-index.train], 
                                       list(dictionary = dimnames(train_dtm2)[[2]]))
+
+```
+
+#### Analysis of training and test bigrams
+
+```{r train_test_split_bi_analysis}
+
+train_bigrams <- colnames(as.matrix(train_dtm2))
+
+test_bigrams <- colnames(as.matrix(test_dtm2))
+
+common_terms <- c()
+index <- 0
+for (test_term in test_bigrams) {
+  
+  index <- index + 1
+  print(index)
+  
+  if(test_term %in% train_bigrams) {
+    print(test_term)
+    common_terms <- c(common_terms, test_term)
+  }
+}
+
+# write.csv(data.frame(common_terms), file = file.path('data', 'common_bigrams_from_test_and_train.csv'))
 
 ```
 
