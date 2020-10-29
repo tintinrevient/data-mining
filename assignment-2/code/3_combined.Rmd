@@ -757,7 +757,9 @@ compare_glms %>% kable()
 
 ### Train
 
-```{r train_tree}
+#### Mutual information
+
+```{r train_tree_mi}
 
 # hyper-parameter: feature selection
 cp.rpart <- 0.036
@@ -776,29 +778,82 @@ model_tree <- rpart(label ~ .,
 
 ```
 
+#### Frequency
+
+```{r train_tree_freq}
+
+# hyper-parameter: feature selection
+cp.rpart <- 0.036
+minsplit.rpart <- 15
+minbucket.rpart <-5
+loss.rpart <- matrix(c(0, 1, 2, 0), nrow = 2, ncol = 2, byrow = TRUE)
+
+model_tree_freq <- rpart(label ~ ., 
+                  data = data.frame(as.matrix(train_dtm_freq), 
+                                             label = train_labels), 
+                  cp = cp.rpart,
+                  minsplit = minsplit.rpart,
+                  minbucket = minbucket.rpart,
+                  parms = list(loss = loss.rpart),
+                  method = "class")
+
+```
+
 ### Predict
 
-```{r predict_tree}
+#### Mutual information
+
+```{r predict_tree_mi}
 
 prediction_tree <- predict(model_tree,
                            newdata = data.frame(as.matrix(test_dtm_mi)),
                            type = "class")
 ```
 
-## Confusion matrix 
+#### Frequency
 
-```{r conf_tree}
+```{r predict_tree_freq}
+
+prediction_tree_freq <- predict(model_tree_freq,
+                           newdata = data.frame(as.matrix(test_dtm_freq)),
+                           type = "class")
+```
+
+### Confusion matrix 
+
+#### Mutual information
+
+```{r conf_tree_mi}
 
 conf_tree <- table(test_labels, prediction_tree, dnn = c("actual", "predicted"))
 
 ```
 
-## Performance metrics
+#### Frequency
 
-```{r performance_tree}
+```{r conf_tree_freq}
+
+conf_tree_freq <- table(test_labels, prediction_tree_freq, dnn = c("actual", "predicted"))
+
+```
+
+### Performance metrics
+
+#### Mutual information
+
+```{r performance_tree_mi}
 
 perf_tree <- performance(conf_tree)
 perf_tree %>% kable()
+
+```
+
+#### Frequency
+
+```{r performance_tree_freq}
+
+perf_tree_freq <- performance(conf_tree_freq)
+perf_tree_freq %>% kable()
 
 ```
 
@@ -806,7 +861,9 @@ perf_tree %>% kable()
 
 ### Train
 
-```{r train_tree2}
+#### Mutual information
+
+```{r train_tree2_mi}
 
 cp.rpart.bigram <- 0
 minsplit.rpart.bigram <- 15
@@ -824,9 +881,31 @@ model_tree2 <- rpart(label ~ .,
 
 ```
 
+#### Frequency
+
+```{r train_tree2_freq}
+
+cp.rpart.bigram <- 0
+minsplit.rpart.bigram <- 15
+minbucket.rpart.bigram <- 5
+loss.rpart.bigram <- matrix(c(0, 1, 2, 0), nrow = 2, ncol = 2, byrow = TRUE)
+
+model_tree2_freq <- rpart(label ~ ., 
+                  data = data.frame(as.matrix(train_dtm2_freq), 
+                                             label = train_labels), 
+                  cp = cp.rpart.bigram,
+                  minsplit = minsplit.rpart.bigram,
+                  minbucket = minbucket.rpart.bigram,
+                  parms = list(loss = loss.rpart.bigram),
+                  method = "class")
+
+```
+
 ### Predict
 
-```{r predict_tree2}
+#### Mutual information
+
+```{r predict_tree2_mi}
 
 prediction_tree2 <- predict(model_tree2,
                            newdata = data.frame(as.matrix(test_dtm2_mi)),
@@ -834,21 +913,51 @@ prediction_tree2 <- predict(model_tree2,
 
 ```
 
-## Confusion matrix 
+#### Frequency
 
-```{r conf_tree2}
+```{r predict_tree2_freq}
 
-conf_tree2 <- table(test_labels, prediction_tree2, dnn = c("actual", "predicted"))
-
+prediction_tree2_freq <- predict(model_tree2_freq,
+                           newdata = data.frame(as.matrix(test_dtm2_freq)),
+                           type = "class")
 
 ```
 
-## Performance metrics
+### Confusion matrix 
 
-```{r perf_tree2}
+#### Mutual information
+
+```{r conf_tree2_mi}
+
+conf_tree2 <- table(test_labels, prediction_tree2, dnn = c("actual", "predicted"))
+
+```
+
+#### Frequency
+
+```{r conf_tree2_freq}
+
+conf_tree2_freq <- table(test_labels, prediction_tree2_freq, dnn = c("actual", "predicted"))
+
+```
+
+### Performance metrics
+
+#### Mutual information
+
+```{r perf_tree2_mi}
 
 perf_tree2 <- performance(conf_tree2)
 perf_tree2 %>% kable()
+
+```
+
+#### Frequency
+
+```{r perf_tree2_fre}
+
+perf_tree2_freq <- performance(conf_tree2_freq)
+perf_tree2_freq %>% kable()
 
 ```
 
