@@ -324,39 +324,79 @@ predict.mnb <- function (model,dtm) {
 
 ```
 
-# 1. Multinomial naive Bayes
-
 ## Unigrams
 
 ### Train
 
-```{r train_mnb}
+#### Mutual information
+
+```{r train_mnb_mi}
 
 model_mnb <- train.mnb(train_dtm_mi, train_labels)
 
 ```
 
+#### Frequency
+
+```{r train_mnb_freq}
+
+model_mnb_freq <- train.mnb(train_dtm_freq, train_labels)
+
+```
+
 ### Predict
 
-```{r predict_mnb}
+#### Mutual information
+
+```{r predict_mnb_mi}
 
 prediction_mnb <-  predict.mnb(model_mnb, as.matrix(test_dtm_mi))
 
 ```
 
+#### Frequency
+
+```{r predict_mnb_freq}
+
+prediction_mnb_freq <-  predict.mnb(model_mnb_freq, as.matrix(test_dtm_freq))
+
+```
+
 ### Confusion matrix
-```{r conf_mnb}
+
+#### Mutual information
+
+```{r conf_mnb_mi}
 
 conf_mnb <- table(test_labels, prediction_mnb, dnn = c("actual", "predicted"))
 
 ```
 
+#### Frequency
+
+```{r conf_mnb_freq}
+
+conf_mnb_freq <- table(test_labels, prediction_mnb_freq, dnn = c("actual", "predicted"))
+
+```
+
 ### Performance metrics
 
-```{r perf_mnb}
+#### Mutual information
+
+```{r perf_mnb_mi}
 
 perf_mnb <- performance(conf_mnb) 
 perf_mnb %>% kable()
+
+```
+
+#### Frequency
+
+```{r perf_mnb_freq}
+
+perf_mnb_freq <- performance(conf_mnb_freq) 
+perf_mnb_freq %>% kable()
 
 ```
 
@@ -364,34 +404,75 @@ perf_mnb %>% kable()
 
 ### Train
 
-```{r train_mnb2}
+#### Mutual information
+
+```{r train_mnb2_mi}
 
 model_mnb2 <- train.mnb(train_dtm2_mi, train_labels)
 
 ```
 
+#### Frequency
+
+```{r train_mnb2_freq}
+
+model_mnb2_freq <- train.mnb(train_dtm2_freq, train_labels)
+
+```
+
 ### Predict
 
-```{r predict_mnb2}
+#### Mutual information
+
+```{r predict_mnb2_mi}
 
 prediction_mnb2 <-  predict.mnb(model_mnb2, as.matrix(test_dtm2_mi))
 
 ```
 
+#### Frequency
+
+```{r predict_mnb2_freq}
+
+prediction_mnb2_freq <-  predict.mnb(model_mnb2_freq, as.matrix(test_dtm2_freq))
+
+```
+
 ### Confusion matrix
 
-```{r conf_mnb2}
+#### Mutual information
+
+```{r conf_mnb2_mi}
 
 conf_mnb2 <- table(test_labels, prediction_mnb2, dnn = c("actual", "predicted"))
 
 ```
 
+#### Frequency
+
+```{r conf_mnb2_freq}
+
+conf_mnb2_freq <- table(test_labels, prediction_mnb2_freq, dnn = c("actual", "predicted"))
+
+```
+
 ### Performnace metrics
 
-```{r perf_mnb2}
+#### Mutual information
+
+```{r perf_mnb2_mi}
 
 perf_mnb2 <- performance(conf_mnb2) 
 perf_mnb2 %>% kable()
+
+```
+
+#### Frequency
+
+```{r perf_mnb2_freq}
+
+perf_mnb2_freq <- performance(conf_mnb2_freq) 
+perf_mnb2_freq %>% kable()
 
 ```
 
