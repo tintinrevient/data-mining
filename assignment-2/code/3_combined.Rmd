@@ -550,6 +550,42 @@ perf_mnb_freq %>% kable()
 
 ```
 
+### Word analysis
+
+#### Mutual information
+
+```{r mnb_word_mi}
+
+# Log-odds of words
+word_log_odds <- log(model_mnb$cond.probs[,2]) - log(model_mnb$cond.probs[,1])
+# Log-odds of words in decreasing cond-prob order
+word_log_odds_order <- order(word_log_odds, decreasing = TRUE)
+
+# Top-5 positive words -> fake review
+word_log_odds[word_log_odds_order[1:5]]
+
+# Top-5 negative words -> genuine review
+word_log_odds[word_log_odds_order[(length(word_log_odds_order)-4):length(word_log_odds_order)]]
+
+```
+
+#### Frequency
+
+```{r mnb_word_freq}
+
+# Log-odds of words
+word_log_odds_freq <- log(model_mnb_freq$cond.probs[,2]) - log(model_mnb_freq$cond.probs[,1])
+# Log-odds of words in decreasing cond-prob order
+word_log_odds_order_freq <- order(word_log_odds_freq, decreasing = TRUE)
+
+# Top-5 positive words -> fake review
+word_log_odds_freq[word_log_odds_order_freq[1:5]]
+
+# Top-5 negative words -> genuine review
+word_log_odds_freq[word_log_odds_order_freq[(length(word_log_odds_order_freq)-4):length(word_log_odds_order_freq)]]
+
+```
+
 ## Bigrams
 
 ### Train
@@ -625,6 +661,43 @@ perf_mnb2_freq <- performance(conf_mnb2_freq)
 perf_mnb2_freq %>% kable()
 
 ```
+
+### Word analysis
+
+#### Mutual information
+
+```{r mnb_word_mi_bi}
+
+# Log-odds of words
+word_log_odds2 <- log(model_mnb2$cond.probs[,2]) - log(model_mnb2$cond.probs[,1])
+# Log-odds of words in decreasing cond-prob order
+word_log_odds_order2 <- order(word_log_odds2, decreasing = TRUE)
+
+# Top-5 positive words -> fake review
+word_log_odds2[word_log_odds_order2[1:50]]
+
+# Top-5 negative words -> genuine review
+word_log_odds2[word_log_odds_order2[(length(word_log_odds_order2)-49):length(word_log_odds_order2)]]
+
+```
+
+#### Frequency
+
+```{r mnb_word_freq_bi}
+
+# Log-odds of words
+word_log_odds2_freq <- log(model_mnb2_freq$cond.probs[,2]) - log(model_mnb2_freq$cond.probs[,1])
+# Log-odds of words in decreasing cond-prob order
+word_log_odds_order2_freq <- order(word_log_odds2_freq, decreasing = TRUE)
+
+# Top-5 positive words -> fake review
+word_log_odds2_freq[word_log_odds_order2_freq[1:5]]
+
+# Top-5 negative words -> genuine review
+word_log_odds2_freq[word_log_odds_order2_freq[(length(word_log_odds_order2_freq)-49):length(word_log_odds_order2_freq)]]
+
+```
+
 
 # 2. Regularised logistic regression (discriminative linear classifier)
 
