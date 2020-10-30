@@ -383,23 +383,6 @@ colnames(words.mnb.unigram) <- c('Top-321 mutual info', 'Top-321 frequent')
 words.mnb.unigram[1:20,]
 ```
 
-```{r mnb_test, eval=FALSE, include=FALSE}
-# Final training set and test set
-train.dtm.mnb <- train.dtm.top300
-test.dtm.mnb <- test.dtm.top300
-
-# Train the model with priors and conditional probabilities
-reviews.mnb.test <- train.mnb(as.matrix(train.dtm.mnb), labels[index.train])
-# Make predictions
-reviews.mnb.test.pred <- predict.mnb(reviews.mnb.test, as.matrix(test.dtm.mnb))
-
-# Confusion matrix
-conf.mat.mnb.test <- table(labels[-index.train], reviews.mnb.test.pred, dnn = c("actual", "predicted"))
-
-perf.mnb.test <-performance(conf.mat.mnb.test) 
-perf.mnb.test %>% kable()
-```
-
 ### 2. Multinomial naive Bayes - Bigram
 
 ```{r mnb_bigram, include=FALSE}
