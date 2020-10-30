@@ -249,7 +249,10 @@ gen_bigram_test <- function(train_dtm, test_dtm_tmp) {
     }
   }
   
+  # Set colunm names from train_dtm2 for all the terms to be matched with train_dtm2
   colnames(test_dtm_mat) <- colnames(train_dtm)
+  # Set row names from test_dtm2 for all the rows to be matched with test_dtm2
+  rownames(test_dtm_mat) <- rownames(test_dtm_tmp)
   
   # Return the final test bigram matrix
   return(test_dtm_mat)
@@ -276,10 +279,10 @@ test_dtm2_tmp <- DocumentTermMatrix(reviews.all[-index.train],
                                      control = list(tokenize = BigramTokenizer))
 
 # Option 1: Load the existing test bigram dataset
-test_dtm2 <- read.table(file.path('data', 'test_dtm2.txt'))
+# test_dtm2 <- read.table(file.path('data', 'test_dtm2.txt'))
 
-# Option 2: create the test bigram dataset
-# test_dtm2 <- gen_bigram_test(train_dtm2, test_dtm2_tmp)
+# Option 2: Create the test bigram dataset
+test_dtm2 <- gen_bigram_test(train_dtm2, test_dtm2_tmp)
 # write.table(test_dtm2, file.path('data', 'test_dtm2.txt'))
 
 ```
@@ -378,10 +381,10 @@ test_dtm_freq <- DocumentTermMatrix(reviews.all[-index.train],
 train_dtm2_freq <- removeSparseTerms(train_dtm2, 0.99)
 
 # Option 1: Load the existing test bigram dataset of frequency
-test_dtm2_freq <- read.table(file.path('data', 'test_dtm2_freq.txt'))
+# test_dtm2_freq <- read.table(file.path('data', 'test_dtm2_freq.txt'))
 
-# Option 2: create the test bigram dataset
-# test_dtm2_freq <- gen_bigram_test(train_dtm2_freq, test_dtm2_tmp)
+# Option 2: Create the test bigram dataset
+test_dtm2_freq <- gen_bigram_test(train_dtm2_freq, test_dtm2_tmp)
 # write.table(test_dtm2_freq, file.path('data', 'test_dtm2_freq.txt'))
 
 ```
